@@ -10,9 +10,12 @@ def test_row_to_params_order():
         "amt_gem": 15.0, "amt_star": 5.0, "amt_bse": 0.0,
     }
     params = cache.row_to_params("20240102", row)
-    assert params[0] == "20240102"
-    assert params[1] == 100.0
-    assert len(params) == 15  # trade_date + 14 字段
+    expected = (
+        "20240102", 100.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.3, 0.5,
+        50.0, 30.0, 0.0, 15.0, 5.0, 0.0,
+    )
+    assert params == expected
+    assert len(params) == 15
 
 
 def test_create_sql_has_table():

@@ -23,18 +23,19 @@ def main(argv=None) -> int:
 
     cache.ensure_table()
 
+    last = None if args.rebuild else cache.max_cached_date()
+
     if args.start:
         start = args.start
     elif args.rebuild:
         start = "20100101"
     else:
-        last = cache.max_cached_date()
         start = last or "20100101"
     end = args.end or "20991231"
 
     dates = loader.trading_dates(start, end)
-    if not args.rebuild and cache.max_cached_date() in dates:
-        dates = dates[dates.index(cache.max_cached_date()) + 1:]
+    if last is not None:
+        dates = [d for d in dates if d > last]
 
     print(f"待计算交易日 {len(dates)} 个：{start}..{end}")
     conn = cache._conn()
