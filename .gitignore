@@ -175,3 +175,4 @@ Desktop.ini
 *.key
 secrets/
 credentials.json
+.superpowers/
