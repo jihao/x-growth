@@ -6,4 +6,10 @@ yfinance
 akshare 
 pandas 
 numpy 
-matplotlib
+matplotlib 
+
+# quant/ 分析系统依赖
+pymysql>=1.1.0
+plotly>=5.20
+streamlit>=1.33
+pytest>=8.0
