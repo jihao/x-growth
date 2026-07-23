@@ -9,6 +9,11 @@ from quant.config import CR_LEVELS
 _BOARD_KEYS = ["sh_main", "sz_main", "sme", "gem", "star", "bse", "other"]
 
 
+def _check_nonneg(a) -> None:
+    if len(a) and (a < 0).any():
+        raise ValueError("amounts must be non-negative")
+
+
 def classify_board(ts_code: str) -> str:
     code = ts_code.split(".")[0]
     if code.startswith(("600", "601", "603", "605")):
@@ -28,6 +33,7 @@ def classify_board(ts_code: str) -> str:
 
 def cr_n(amounts: pd.Series, n: int) -> float:
     a = amounts.dropna().astype(float)
+    _check_nonneg(a)
     total = a.sum()
     if total <= 0:
         return 0.0
@@ -37,6 +43,7 @@ def cr_n(amounts: pd.Series, n: int) -> float:
 
 def hhi(amounts: pd.Series) -> float:
     a = amounts.dropna().astype(float)
+    _check_nonneg(a)
     total = a.sum()
     if total <= 0:
         return 0.0
@@ -46,6 +53,8 @@ def hhi(amounts: pd.Series) -> float:
 
 def gini(amounts: pd.Series) -> float:
     a = np.sort(amounts.dropna().astype(float).values)
+    if a.size and a.min() < 0:
+        raise ValueError("amounts must be non-negative")
     n = a.size
     if n == 0 or a.sum() == 0:
         return 0.0

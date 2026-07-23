@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from quant.concentration import market as m
 
@@ -31,7 +32,7 @@ def test_gini_bounds():
     equal = pd.Series([10, 10, 10, 10], dtype=float)
     assert abs(m.gini(equal)) < 1e-9
     skew = pd.Series([0, 0, 0, 100], dtype=float)
-    assert m.gini(skew) > 0.7
+    assert abs(m.gini(skew) - 0.75) < 1e-9
 
 
 def test_concentration_row():
@@ -46,4 +47,24 @@ def test_concentration_row():
     assert row["cr5"] == 1.0
     assert abs(row["amt_sh_main"] - 50.0) < 1e-9
     assert abs(row["amt_gem"] - 15.0) < 1e-9
+
+
+def test_concentration_row_field_order():
+    df = pd.DataFrame({"ts_code": ["600000.SH"], "amount": [10.0]})
+    row = m.concentration_row(df)
+    assert list(row) == [
+        "total_amount", "cr5", "cr10", "cr20", "cr50", "cr100",
+        "hhi", "gini",
+        "amt_sh_main", "amt_sz_main", "amt_sme", "amt_gem", "amt_star", "amt_bse",
+    ]
+
+
+def test_negative_amount_rejected():
+    neg = pd.Series([-1.0, 2.0])
+    with pytest.raises(ValueError):
+        m.cr_n(neg, 1)
+    with pytest.raises(ValueError):
+        m.hhi(neg)
+    with pytest.raises(ValueError):
+        m.gini(neg)
 
