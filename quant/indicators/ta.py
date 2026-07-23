@@ -67,9 +67,11 @@ def mfi(high, low, close, volume, n=14):
     pos = mf.where(tp > tp.shift(1), 0.0)
     neg = mf.where(tp < tp.shift(1), 0.0)
     pos_sum = pos.rolling(n).sum()
-    neg_sum = neg.rolling(n).sum().replace(0, np.nan)
-    mfr = pos_sum / neg_sum
-    return 100 - 100 / (1 + mfr)
+    neg_raw = neg.rolling(n).sum()
+    mfr = pos_sum / neg_raw.replace(0, np.nan)
+    out = 100 - 100 / (1 + mfr)
+    out = out.where(~((neg_raw == 0) & (pos_sum > 0)), 100.0)
+    return out
 
 
 def atr(high, low, close, n=14):
@@ -83,8 +85,10 @@ def atr(high, low, close, n=14):
 def swing_points(close, window=5):
     highs = close.rolling(window * 2 + 1, center=True).max()
     lows = close.rolling(window * 2 + 1, center=True).min()
+    not_flat = highs > lows
     return pd.DataFrame(
-        {"is_high": close == highs, "is_low": close == lows}, index=close.index
+        {"is_high": (close == highs) & not_flat, "is_low": (close == lows) & not_flat},
+        index=close.index,
     )
 
 

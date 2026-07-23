@@ -61,3 +61,35 @@ def test_atr_positive():
     close = (high + low) / 2
     a = ta.atr(high, low, close, 14).dropna()
     assert (a > 0).all()
+
+
+def test_mfi_all_positive_returns_100():
+    n = 20
+    idx = pd.date_range("2020-01-01", periods=n, freq="D")
+    close = pd.Series(np.arange(10.0, 10.0 + n), index=idx)
+    high = close + 1.0
+    low = close - 1.0
+    volume = pd.Series(np.full(n, 1000.0), index=idx)
+    m = ta.mfi(high, low, close, volume, n=14)
+    assert abs(m.dropna().iloc[-1] - 100.0) < 1e-9
+    warmed = m.iloc[13:]
+    assert warmed.notna().all()
+    assert np.allclose(warmed, 100.0)
+
+
+def test_swing_points_flat_not_both():
+    s = _series([5.0] * 20)
+    res = ta.swing_points(s, window=2)
+    assert not (res["is_high"] & res["is_low"]).any()
+
+
+def test_swing_points_detects_peak():
+    vals = [1.0, 2.0, 3.0, 4.0, 5.0, 4.0, 3.0, 2.0, 3.0, 4.0, 3.0, 2.0]
+    s = _series(vals)
+    res = ta.swing_points(s, window=1)
+    peak_idx = s.index[4]
+    trough_idx = s.index[7]
+    assert res.loc[peak_idx, "is_high"]
+    assert not res.loc[peak_idx, "is_low"]
+    assert res.loc[trough_idx, "is_low"]
+    assert not res.loc[trough_idx, "is_high"]
