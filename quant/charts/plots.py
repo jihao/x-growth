@@ -52,14 +52,29 @@ def kline_chart(df, overlays=("ma5", "ma20", "boll"), sub=("macd", "rsi"), drawa
         r += 1
 
     fig.update_layout(
-        height=800, xaxis_rangeslider_visible=False,
+        height=800,
         dragmode="drawline" if drawable else "zoom",
         newshape=dict(line_color="orange"),
         modebar_add=["drawline", "drawopenpath", "eraseshape"] if drawable else [],
         legend=dict(orientation="h"),
         margin=dict(l=40, r=20, t=30, b=20),
     )
+    # 上方子图关 rangeslider，仅最底部启用作为时间轴拖拽条；主图加区间选择按钮
     fig.update_xaxes(rangeslider_visible=False)
+    fig.update_xaxes(rangeslider_visible=True, rangeslider_thickness=0.05, row=rows, col=1)
+    fig.update_xaxes(
+        rangeselector=dict(
+            buttons=[
+                dict(count=1, label="1M", step="month", stepmode="backward"),
+                dict(count=3, label="3M", step="month", stepmode="backward"),
+                dict(count=6, label="6M", step="month", stepmode="backward"),
+                dict(count=1, label="YTD", step="year", stepmode="todate"),
+                dict(count=1, label="1Y", step="year", stepmode="backward"),
+                dict(step="all", label="ALL"),
+            ]
+        ),
+        row=1, col=1,
+    )
     return fig
 
 
