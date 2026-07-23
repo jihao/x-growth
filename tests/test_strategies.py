@@ -34,9 +34,7 @@ def test_ma_cross_goes_long_in_uptrend():
 
 
 def test_bollinger_touch_lower_inclusive():
-    # 构造一段使某日 close 恰好等于下轨的序列：前期恒定后突降
-    prices = [10.0] * 20 + [9.0]
-    df = _df(prices)
-    sig = strategies.get("bollinger").generate(df, n=20, k=2.0)
-    # 最后一日 close 低于/等于下轨 -> 持仓
-    assert sig.iloc[-1] == 1.0
+    # n=5,k=2: prices [10,10,10,10,9] -> mid=9.8, std=0.4, lower=9.0 == 最后收盘
+    df = _df([10.0, 10.0, 10.0, 10.0, 9.0])
+    sig = strategies.get("bollinger").generate(df, n=5, k=2.0)
+    assert sig.iloc[-1] == 1.0  # close 恰好等于下轨 -> 买入（验证 <=）
