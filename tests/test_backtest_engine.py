@@ -35,3 +35,33 @@ def test_benchmark_buyhold():
     sig = pd.Series([0, 0, 0], index=df.index, dtype=float)
     res = engine.run(df, sig, cost=0.0)
     assert abs(res.benchmark.iloc[-1] - 1.21) < 1e-9
+
+
+def test_trade_prices_match_equity():
+    df = _df([100, 110, 121, 110])
+    sig = pd.Series([1, 1, 0, 0], index=df.index, dtype=float)
+    res = engine.run(df, sig, cost=0.0)
+    assert len(res.trades) == 1
+    t = res.trades[0]
+    assert t["entry_px"] == 100.0
+    assert t["exit_px"] == 121.0
+    assert abs(t["ret"] - 0.21) < 1e-9
+    assert abs((res.equity.iloc[-1] - 1) - t["ret"]) < 1e-9
+
+
+def test_open_position_closed_at_end():
+    df = _df([100, 110, 121])
+    sig = pd.Series([1, 1, 1], index=df.index, dtype=float)
+    res = engine.run(df, sig, cost=0.0)
+    assert len(res.trades) == 1
+    t = res.trades[0]
+    assert t["entry_px"] == 100.0
+    assert t["exit_px"] == 121.0
+    assert abs(t["ret"] - 0.21) < 1e-9
+
+
+def test_slippage_adds_cost():
+    df = _df([100, 100, 100])
+    sig = pd.Series([1, 1, 1], index=df.index, dtype=float)
+    res = engine.run(df, sig, cost=0.0, slippage=0.002)
+    assert abs(res.strat_ret.iloc[1] + 0.002) < 1e-9

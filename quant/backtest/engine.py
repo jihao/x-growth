@@ -16,15 +16,16 @@ class BacktestResult:
 
 
 def _extract_trades(close: pd.Series, position: pd.Series) -> list:
+    prev_close = close.shift(1)
     trades = []
     entry_idx = None
     entry_px = None
     prev = 0.0
     for ts, pos in position.items():
         if prev == 0 and pos == 1:
-            entry_idx, entry_px = ts, close.loc[ts]
+            entry_idx, entry_px = ts, prev_close.loc[ts]
         elif prev == 1 and pos == 0 and entry_idx is not None:
-            exit_px = close.loc[ts]
+            exit_px = prev_close.loc[ts]
             trades.append(
                 {
                     "entry": entry_idx, "exit": ts,
@@ -48,7 +49,7 @@ def _extract_trades(close: pd.Series, position: pd.Series) -> list:
 
 def run(df: pd.DataFrame, signal: pd.Series, cost=0.0003, slippage=0.0) -> BacktestResult:
     close = df["close"].astype(float)
-    signal = signal.reindex(close.index).fillna(0.0).clip(0, 1)
+    signal = signal.reindex(close.index).fillna(0.0).clip(0, 1).round()
     position = signal.shift(1).fillna(0.0)          # T+1 生效
     ret = close.pct_change().fillna(0.0)
     turnover = position.diff().abs().fillna(position.abs())
