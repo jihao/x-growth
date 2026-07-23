@@ -15,6 +15,21 @@ def test_performance_basic():
     assert "sharpe" in perf and "num_trades" in perf
 
 
+def test_ann_vol_sharpe_zero_when_single_return():
+    idx = pd.date_range("2020-01-01", periods=1, freq="D")
+    res = engine.BacktestResult(
+        equity=pd.Series([1.0], index=idx),
+        position=pd.Series([0.0], index=idx),
+        strat_ret=pd.Series([0.0], index=idx),
+        benchmark=pd.Series([1.0], index=idx),
+        trades=[],
+    )
+    perf = metrics.performance(res)
+    assert perf["ann_vol"] == 0.0
+    assert perf["sharpe"] == 0.0
+    assert not np.isnan(perf["ann_vol"])
+
+
 def test_max_drawdown():
     idx = pd.date_range("2020-01-01", periods=3, freq="D")
     # 净值 1 -> 1.2 -> 0.9，最大回撤 = 0.9/1.2 - 1 = -0.25

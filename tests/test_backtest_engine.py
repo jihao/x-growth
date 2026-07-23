@@ -60,6 +60,17 @@ def test_open_position_closed_at_end():
     assert abs(t["ret"] - 0.21) < 1e-9
 
 
+def test_run_requires_close_column():
+    idx = pd.date_range("2020-01-01", periods=2, freq="D")
+    df = pd.DataFrame({"open": [100.0, 101.0]}, index=idx)
+    sig = pd.Series([1, 0], index=idx, dtype=float)
+    try:
+        engine.run(df, sig)
+        assert False, "expected ValueError"
+    except ValueError as e:
+        assert "close" in str(e)
+
+
 def test_slippage_adds_cost():
     df = _df([100, 100, 100])
     sig = pd.Series([1, 1, 1], index=df.index, dtype=float)

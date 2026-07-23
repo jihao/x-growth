@@ -48,6 +48,8 @@ def _extract_trades(close: pd.Series, position: pd.Series) -> list:
 
 
 def run(df: pd.DataFrame, signal: pd.Series, cost=0.0003, slippage=0.0) -> BacktestResult:
+    if "close" not in df.columns:
+        raise ValueError("df 需包含 'close' 列")
     close = df["close"].astype(float)
     signal = signal.reindex(close.index).fillna(0.0).clip(0, 1).round()
     position = signal.shift(1).fillna(0.0)          # T+1 生效

@@ -23,4 +23,8 @@ def fmt_date(value) -> str:
     s = str(value).strip().replace("-", "").replace("/", "")
     if len(s) != 8 or not s.isdigit():
         raise ValueError(f"无法解析日期: {value!r}")
+    try:
+        datetime.strptime(s, "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"无法解析日期: {value!r}") from None
     return s

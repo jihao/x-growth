@@ -12,8 +12,12 @@ def performance(result) -> dict:
     n = len(equity)
     total_return = float(equity.iloc[-1] - 1) if n else 0.0
     ann_return = float(equity.iloc[-1] ** (TRADING_DAYS / n) - 1) if n else 0.0
-    vol = float(strat_ret.std())
-    ann_vol = vol * np.sqrt(TRADING_DAYS)
+    if len(strat_ret) < 2:
+        vol = 0.0
+        ann_vol = 0.0
+    else:
+        vol = float(strat_ret.std())
+        ann_vol = vol * np.sqrt(TRADING_DAYS)
     mean = float(strat_ret.mean())
     sharpe = (mean / vol * np.sqrt(TRADING_DAYS)) if vol > 0 else 0.0
 

@@ -88,6 +88,11 @@ def atr(high, low, close, n=14):
 
 
 def swing_points(close, window=5):
+    """识别局部高低点（事后图表标注用）。
+
+    使用 ``center=True`` 的滚动窗口，会引用未来数据。仅用于回测/复盘后的
+    可视化标记，**不得**用于生成交易信号或任何实盘/回测决策逻辑。
+    """
     highs = close.rolling(window * 2 + 1, center=True).max()
     lows = close.rolling(window * 2 + 1, center=True).min()
     not_flat = highs > lows
