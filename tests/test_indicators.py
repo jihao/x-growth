@@ -93,3 +93,13 @@ def test_swing_points_detects_peak():
     assert not res.loc[peak_idx, "is_low"]
     assert res.loc[trough_idx, "is_low"]
     assert not res.loc[trough_idx, "is_high"]
+
+
+def test_donchian_channel():
+    idx = pd.date_range("2020-01-01", periods=6, freq="D")
+    high = pd.Series([2, 3, 4, 3, 2, 5], index=idx, dtype=float)
+    low = pd.Series([1, 1, 2, 1, 0, 1], index=idx, dtype=float)
+    up, lo = ta.donchian_channel(high, low, upper_n=3, lower_n=3)
+    assert up.iloc[2] == 4.0   # max(2,3,4)
+    assert lo.iloc[2] == 1.0   # min(1,1,2)
+    assert up.iloc[5] == 5.0   # max(3,2,5)

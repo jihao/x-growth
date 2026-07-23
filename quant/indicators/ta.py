@@ -26,6 +26,11 @@ def boll(close, n=20, k=2.0):
     return mid + k * std, mid, mid - k * std
 
 
+def donchian_channel(high, low, upper_n=20, lower_n=10):
+    """唐奇安通道：上轨=近 upper_n 日最高，下轨=近 lower_n 日最低（未位移）。"""
+    return high.rolling(upper_n).max(), low.rolling(lower_n).min()
+
+
 def rsi(close, n=14):
     delta = close.diff()
     gain = delta.clip(lower=0)

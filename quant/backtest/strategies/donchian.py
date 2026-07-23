@@ -2,12 +2,14 @@
 import numpy as np
 import pandas as pd
 
+from quant.indicators import ta
 from quant.backtest.strategies.base import Strategy
 
 
 def _gen(df, entry=20, exit=10):
-    upper = df["high"].rolling(entry).max().shift(1)
-    lower = df["low"].rolling(exit).min().shift(1)
+    upper_raw, lower_raw = ta.donchian_channel(df["high"], df["low"], entry, exit)
+    upper = upper_raw.shift(1)
+    lower = lower_raw.shift(1)
     close = df["close"]
     pos = np.where(close > upper, 1.0, np.where(close < lower, 0.0, np.nan))
     return pd.Series(pos, index=df.index).ffill().fillna(0.0)

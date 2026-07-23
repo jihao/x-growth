@@ -31,3 +31,12 @@ def test_ma_cross_goes_long_in_uptrend():
     df = _df(np.linspace(10, 30, 80))
     sig = strategies.get("ma_cross").generate(df, fast=5, slow=20)
     assert sig.iloc[-1] == 1.0
+
+
+def test_bollinger_touch_lower_inclusive():
+    # 构造一段使某日 close 恰好等于下轨的序列：前期恒定后突降
+    prices = [10.0] * 20 + [9.0]
+    df = _df(prices)
+    sig = strategies.get("bollinger").generate(df, n=20, k=2.0)
+    # 最后一日 close 低于/等于下轨 -> 持仓
+    assert sig.iloc[-1] == 1.0
