@@ -1,9 +1,7 @@
-import importlib
-import sys
 from pathlib import Path
 
 
-def test_app_module_imports(monkeypatch):
+def test_app_module_imports():
     # 仅验证模块可被解析（不执行 streamlit 运行时）
     root = Path(__file__).resolve().parent.parent
     app_file = root / "app" / "main.py"

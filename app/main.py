@@ -27,6 +27,14 @@ def _daily(ts_code, start, end):
     return loader.load_daily(ts_code, start, end)
 
 
+def _safe_daily(ts_code, start, end):
+    try:
+        return _daily(ts_code, start, end)
+    except Exception as exc:  # DB 失败友好提示
+        st.error(f"读取日线数据失败：{exc}")
+        st.stop()
+
+
 st.title("量化交易分析系统")
 
 with st.sidebar:
@@ -37,6 +45,9 @@ with st.sidebar:
     except Exception as exc:  # 连库失败友好提示
         st.error(f"无法连接 MySQL，请检查 database/mysql/mysql.env：{exc}")
         st.stop()
+    if stocks.empty or not options:
+        st.error("股票列表为空，请检查数据库。")
+        st.stop()
     picked = st.selectbox("股票", options)
     ts_code = picked.split("  ")[0]
     start = st.date_input("开始", pd.Timestamp("2022-01-01")).strftime("%Y%m%d")
@@ -45,7 +56,7 @@ with st.sidebar:
 tab1, tab2, tab3 = st.tabs(["行情分析", "资金集中度", "策略回测"])
 
 with tab1:
-    df = _daily(ts_code, start, end)
+    df = _safe_daily(ts_code, start, end)
     if df.empty:
         st.warning("该区间无数据。")
     else:
@@ -69,7 +80,11 @@ with tab2:
         st.plotly_chart(plots.concentration_chart(sdf, metric), use_container_width=True)
         st.plotly_chart(plots.board_area_chart(sdf), use_container_width=True)
         detail_date = st.date_input("查看某日明细", pd.Timestamp(sdf.index[-1]))
-        cross = loader.load_cross_section(detail_date.strftime("%Y%m%d"))
+        try:
+            cross = loader.load_cross_section(detail_date.strftime("%Y%m%d"))
+        except Exception as exc:
+            st.error(f"读取截面数据失败：{exc}")
+            cross = pd.DataFrame()
         if not cross.empty:
             st.plotly_chart(plots.concentration_detail_chart(cross), use_container_width=True)
 
@@ -81,10 +96,15 @@ with tab3:
     params = {}
     cols = st.columns(max(len(strat.default_params), 1))
     for (k, v), c in zip(strat.default_params.items(), cols):
-        params[k] = c.number_input(k, value=float(v))
+        if isinstance(v, bool):
+            params[k] = c.checkbox(k, value=v)
+        elif isinstance(v, int):
+            params[k] = int(c.number_input(k, value=int(v), step=1))
+        else:
+            params[k] = float(c.number_input(k, value=float(v)))
     cost = st.number_input("单边手续费率", value=0.0003, format="%.4f")
     if st.button("运行回测"):
-        df = _daily(ts_code, start, end)
+        df = _safe_daily(ts_code, start, end)
         if df.empty:
             st.warning("该区间无数据。")
         else:
