@@ -16,7 +16,9 @@ def _conn():
 
 def _normalize_daily(df_raw: pd.DataFrame) -> pd.DataFrame:
     if df_raw is None or df_raw.empty:
-        return pd.DataFrame(columns=_DAILY_COLS)
+        return pd.DataFrame(
+            columns=_DAILY_COLS, index=pd.DatetimeIndex([], name="trade_date")
+        )
     df = df_raw.copy()
     df["trade_date"] = pd.to_datetime(df["trade_date"].astype(str), format="%Y%m%d")
     df = df.set_index("trade_date").sort_index()
