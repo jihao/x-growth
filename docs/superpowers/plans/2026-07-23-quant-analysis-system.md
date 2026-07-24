@@ -679,7 +679,6 @@ git commit -m "feat(quant): 市场资金集中度算法"
 
 ```python
 from quant.concentration import cache
-from quant.concentration import market
 
 
 def test_row_to_params_order():
@@ -693,7 +692,7 @@ def test_row_to_params_order():
     params = cache.row_to_params("20240102", row)
     assert params[0] == "20240102"
     assert params[1] == 100.0
-    assert len(params) == 16  # trade_date + 15 字段
+    assert len(params) == 15  # trade_date + 14 字段
 
 
 def test_create_sql_has_table():
@@ -951,7 +950,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import numpy as np
 import pandas as pd
 
 
@@ -1175,7 +1173,7 @@ Expected: FAIL。
 """策略接口：输入标准行情 DataFrame，输出目标仓位序列 {0,1}。"""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Callable
 
 import pandas as pd
@@ -1200,8 +1198,6 @@ class Strategy:
 
 ```python
 """双均线交叉：快线上穿慢线持有，下穿空仓。"""
-import pandas as pd
-
 from quant.indicators import ta
 from quant.backtest.strategies.base import Strategy
 
@@ -1219,8 +1215,6 @@ STRATEGY = Strategy("ma_cross", "双均线交叉", {"fast": 5, "slow": 20}, _gen
 
 ```python
 """MACD：DIF 上穿 DEA 持有，下穿空仓。"""
-import pandas as pd
-
 from quant.indicators import ta
 from quant.backtest.strategies.base import Strategy
 
