@@ -31,6 +31,32 @@ def test_colinear_lows_get_multiple_touches():
     assert res.best_up is not None
     assert res.best_up.touch_count >= 3
     assert res.best_up.side == "up"
+    assert res.best_up.slope > 0
+
+
+def test_declining_lows_are_not_up_trendlines():
+    """下跌中的更低低点连线斜率向下，不能标成上升趋势线。"""
+    n = 40
+    close = np.linspace(20, 10, n)
+    low = close - 0.5
+    high = close + 0.5
+    # 明确递减的低点
+    for i, p in [(5, 18.0), (15, 14.0), (25, 10.0)]:
+        low[i] = p
+        for d in range(1, 3):
+            low[i - d] = p + 1.0
+            low[i + d] = p + 1.0
+    idx = pd.date_range("2020-01-01", periods=n, freq="D")
+    df = pd.DataFrame(
+        {"open": close, "high": high, "low": low, "close": close,
+         "volume": 1, "amount": 1},
+        index=idx,
+    )
+    res = trendlines.find_trendlines(
+        df, window=2, min_pct=0.0, tol=0.02, min_bars=5, top_k=5
+    )
+    assert res.best_up is None
+    assert all(tl.slope > 0 for tl in res.up)
 
 
 def test_point_outside_tol_not_counted():

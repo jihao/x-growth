@@ -28,6 +28,11 @@ def find_trendlines(
             if abs(i2 - i1) < min_bars:
                 continue
             slope = (p2 - p1) / (i2 - i1)
+            # 上升线必须斜率为正（抬高低点）；下降线必须斜率为负（降低高点）
+            if side == "up" and slope <= 0:
+                continue
+            if side == "down" and slope >= 0:
+                continue
             intercept = p1 - slope * i1
             touches, touch_pos = [], []
             for i, p, d in points:
