@@ -24,6 +24,16 @@ def kline_chart(df, overlays=("ma5", "ma20", "boll"), sub=("macd", "rsi"), drawa
         go.Candlestick(
             x=df.index, open=df["open"], high=df["high"], low=df["low"],
             close=df["close"], name="K线",
+            increasing=dict(line=dict(color="#ef5350"), fillcolor="#ef5350"),
+            decreasing=dict(line=dict(color="#26a69a"), fillcolor="#26a69a"),
+            hovertemplate=(
+                "%{x|%Y-%m-%d}<br>"
+                "开盘: %{open:.4f}<br>"
+                "最高: %{high:.4f}<br>"
+                "最低: %{low:.4f}<br>"
+                "收盘: %{close:.4f}"
+                "<extra></extra>"
+            ),
         ),
         row=1, col=1,
     )

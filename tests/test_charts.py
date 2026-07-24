@@ -21,6 +21,17 @@ def test_kline_returns_figure():
     assert len(fig.data) >= 1
 
 
+def test_kline_cn_colors_and_hover():
+    """A 股习惯：红涨绿跌；hover 显示开盘/最高/最低/收盘。"""
+    fig = plots.kline_chart(_df())
+    candle = next(t for t in fig.data if t.type == "candlestick")
+    assert candle.increasing.line.color == "#ef5350"
+    assert candle.decreasing.line.color == "#26a69a"
+    ht = candle.hovertemplate or ""
+    for label in ("开盘", "最高", "最低", "收盘"):
+        assert label in ht
+
+
 def test_backtest_chart():
     df = _df()
     sig = pd.Series(1.0, index=df.index)
