@@ -14,3 +14,4 @@ def test_app_module_imports():
     assert "concentration_chart" in src
     assert "find_trendlines" in src
     assert "即将支持" in src
+    assert "起点 / 终点怎么定" in src

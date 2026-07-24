@@ -70,6 +70,17 @@ with tab1:
 
         auto_tl = st.checkbox("自动趋势线", value=True)
         with st.expander("趋势线参数", expanded=False):
+            st.markdown(
+                """
+**起点 / 终点怎么定？**
+
+1. 先用 `window` 在日线 `high`/`low` 上找波段高低点（左右各确认若干根 K 线）。
+2. **上升趋势线**：在波段**低点**里任取两点连线，且斜率必须为正；  
+   **下降趋势线**：在波段**高点**里任取两点连线，且斜率必须为负。
+3. 明细表里的 **起点 / 终点** = 这条线用来定直线的那两个波段点（按时间早晚排序），图上线段也画在这两点之间。
+4. **触点** = 落在该直线容差 `tol` 内的其它波段点（含起终点），触点越多得分越高；`min_bars` 限制两点至少隔多少根 K 线；`top_k` 为上升/下降各保留几条。
+                """.strip()
+            )
             tl_window = st.number_input("window", min_value=2, max_value=20, value=5, step=1)
             tl_tol = st.number_input("tol", min_value=0.001, max_value=0.1, value=0.015, format="%.3f")
             tl_top_k = st.number_input("top_k", min_value=1, max_value=10, value=3, step=1)
