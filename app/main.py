@@ -64,7 +64,7 @@ with tab1:
                                   default=["ma5", "ma20", "boll"])
         sub = st.multiselect("副图", ["macd", "rsi"], default=["macd", "rsi"])
         st.plotly_chart(plots.kline_chart(df, tuple(overlays), tuple(sub)),
-                        use_container_width=True)
+                        width="stretch")
 
 with tab2:
     st.subheader("市场资金集中度（历史）")
@@ -77,8 +77,8 @@ with tab2:
         st.info("集中度缓存为空，请先运行：.venv/bin/python -m quant.concentration.build_cache --rebuild")
     else:
         metric = st.selectbox("指标", ["hhi", "gini", "cr5", "cr10", "cr20", "cr50", "cr100"])
-        st.plotly_chart(plots.concentration_chart(sdf, metric), use_container_width=True)
-        st.plotly_chart(plots.board_area_chart(sdf), use_container_width=True)
+        st.plotly_chart(plots.concentration_chart(sdf, metric), width="stretch")
+        st.plotly_chart(plots.board_area_chart(sdf), width="stretch")
         detail_date = st.date_input("查看某日明细", pd.Timestamp(sdf.index[-1]))
         try:
             cross = loader.load_cross_section(detail_date.strftime("%Y%m%d"))
@@ -86,7 +86,7 @@ with tab2:
             st.error(f"读取截面数据失败：{exc}")
             cross = pd.DataFrame()
         if not cross.empty:
-            st.plotly_chart(plots.concentration_detail_chart(cross), use_container_width=True)
+            st.plotly_chart(plots.concentration_detail_chart(cross), width="stretch")
 
 with tab3:
     st.subheader("策略回测")
@@ -121,4 +121,4 @@ with tab3:
             c6.metric("盈亏比", f"{perf['profit_factor']:.2f}")
             c7.metric("交易次数", perf["num_trades"])
             c8.metric("基准收益", f"{perf['bench_total_return']:.2%}")
-            st.plotly_chart(plots.backtest_chart(res), use_container_width=True)
+            st.plotly_chart(plots.backtest_chart(res), width="stretch")
