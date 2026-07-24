@@ -156,3 +156,41 @@ def concentration_detail_chart(cross_df, top=20):
     fig.update_layout(height=500, title=f"成交额前 {top} 名",
                       yaxis=dict(autorange="reversed"), margin=dict(l=120, r=20, t=40, b=20))
     return fig
+
+
+def overlay_trendlines(fig, df, result):
+    """在已有 K 线 Figure 上叠加自动趋势线与触点。"""
+    pos = {d: i for i, d in enumerate(df.index)}
+
+    def add_line(tl, color, name):
+        if tl.start_date not in pos or tl.end_date not in pos:
+            return
+        i0, i1 = pos[tl.start_date], pos[tl.end_date]
+        x0, x1 = df.index[i0], df.index[i1]
+        y0, y1 = tl.price_at(i0), tl.price_at(i1)
+        fig.add_trace(
+            go.Scatter(
+                x=[x0, x1], y=[y0, y1], mode="lines",
+                name=name, line=dict(color=color, width=2),
+                hoverinfo="skip",
+            ),
+            row=1, col=1,
+        )
+        touch_x = [d for d in tl.touch_dates if d in pos]
+        touch_y = [tl.price_at(pos[d]) for d in touch_x]
+        if touch_x:
+            fig.add_trace(
+                go.Scatter(
+                    x=touch_x, y=touch_y, mode="markers",
+                    name=f"{name}触点",
+                    marker=dict(color=color, size=8, symbol="circle-open"),
+                    hovertemplate="%{x|%Y-%m-%d}<br>触点: %{y:.4f}<extra></extra>",
+                ),
+                row=1, col=1,
+            )
+
+    for i, tl in enumerate(result.up):
+        add_line(tl, "#e57373", f"上升趋势{i + 1}")
+    for i, tl in enumerate(result.down):
+        add_line(tl, "#4db6ac", f"下降趋势{i + 1}")
+    return fig

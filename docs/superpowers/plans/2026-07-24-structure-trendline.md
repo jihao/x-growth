@@ -685,6 +685,6 @@ git commit -m "feat(app): 行情 Tab 接入自动趋势线与周线占位"
 - 离线测试 → 各 Task ✅
 - 非目标（选股/浪型/周线计算）未纳入 ✅
 
-**Placeholder scan:** 无 TBD；Task 3 实现块含一处「清理未使用函数」说明，实现者须交付干净文件。
+**Placeholder scan:** 无 TBD；Task 3 为实现整文件干净交付。
 
 **Type consistency:** `Trendline` / `TrendlineResult` 字段在 models → trendlines → overlay → app 一致；`find_trendlines` / `evaluate_breakout` / `overlay_trendlines` 签名前后一致。

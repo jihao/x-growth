@@ -50,7 +50,8 @@ with st.sidebar:
         st.stop()
     picked = st.selectbox("股票", options)
     ts_code = picked.split("  ")[0]
-    start = st.date_input("开始", pd.Timestamp("2022-01-01")).strftime("%Y%m%d")
+    _default_start = pd.Timestamp.today() - pd.DateOffset(months=6)
+    start = st.date_input("开始", _default_start).strftime("%Y%m%d")
     end = st.date_input("结束", pd.Timestamp.today()).strftime("%Y%m%d")
 
 tab1, tab2, tab3 = st.tabs(["行情分析", "资金集中度", "策略回测"])
@@ -63,8 +64,58 @@ with tab1:
         overlays = st.multiselect("叠加", ["ma5", "ma10", "ma20", "ma60", "boll"],
                                   default=["ma5", "ma20", "boll"])
         sub = st.multiselect("副图", ["macd", "rsi"], default=["macd", "rsi"])
-        st.plotly_chart(plots.kline_chart(df, tuple(overlays), tuple(sub)),
-                        width="stretch")
+        period = st.selectbox("周期", ["日线", "周线（即将支持）"])
+        if period.startswith("周线"):
+            st.caption("周线趋势线即将支持；以下仍按日线计算。")
+
+        auto_tl = st.checkbox("自动趋势线", value=True)
+        with st.expander("趋势线参数", expanded=False):
+            tl_window = st.number_input("window", min_value=2, max_value=20, value=5, step=1)
+            tl_tol = st.number_input("tol", min_value=0.001, max_value=0.1, value=0.015, format="%.3f")
+            tl_top_k = st.number_input("top_k", min_value=1, max_value=10, value=3, step=1)
+            tl_min_bars = st.number_input("min_bars", min_value=3, max_value=60, value=10, step=1)
+
+        fig = plots.kline_chart(df, tuple(overlays), tuple(sub))
+        detail_rows = []
+        if auto_tl:
+            from quant.structure.trendlines import find_trendlines, evaluate_breakout
+
+            res = find_trendlines(
+                df,
+                window=int(tl_window),
+                tol=float(tl_tol),
+                top_k=int(tl_top_k),
+                min_bars=int(tl_min_bars),
+            )
+            if res.best_up is None and res.best_down is None:
+                st.info("区间内有效波段点不足，无法拟合趋势线。")
+            else:
+                x_today = len(df) - 1
+                res = evaluate_breakout(
+                    res, float(df["close"].iloc[-1]), x_today, tol=float(tl_tol)
+                )
+                fig = plots.overlay_trendlines(fig, df, res)
+                msgs = []
+                if res.best_up and res.best_up.status == "broken":
+                    msgs.append("上升趋势线已破位")
+                if res.best_down and res.best_down.status == "broken":
+                    msgs.append("下降趋势线已升破")
+                if msgs:
+                    st.warning("；".join(msgs))
+                for tl in res.up + res.down:
+                    detail_rows.append({
+                        "方向": "上升" if tl.side == "up" else "下降",
+                        "触点数": tl.touch_count,
+                        "得分": round(tl.score, 2),
+                        "起点": str(tl.start_date)[:10],
+                        "终点": str(tl.end_date)[:10],
+                        "状态": tl.status or "",
+                        "触点日": ", ".join(str(d)[:10] for d in tl.touch_dates),
+                    })
+        st.plotly_chart(fig, width="stretch")
+        if detail_rows:
+            with st.expander("趋势线明细", expanded=True):
+                st.dataframe(pd.DataFrame(detail_rows), width="stretch")
 
 with tab2:
     st.subheader("市场资金集中度（历史）")
