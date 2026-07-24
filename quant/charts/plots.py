@@ -26,28 +26,42 @@ def kline_chart(df, overlays=("ma5", "ma20", "boll"), sub=("macd", "rsi"), drawa
             close=df["close"], name="K线",
             increasing=dict(line=dict(color="#ef5350"), fillcolor="#ef5350"),
             decreasing=dict(line=dict(color="#26a69a"), fillcolor="#26a69a"),
-            hovertemplate=(
-                "%{x|%Y-%m-%d}<br>"
-                "开盘: %{open:.4f}<br>"
-                "最高: %{high:.4f}<br>"
-                "最低: %{low:.4f}<br>"
-                "收盘: %{close:.4f}"
-                "<extra></extra>"
-            ),
+            # text + hoverinfo 比单独 hovertemplate 在 Candlestick 上更稳
+            text=[
+                (
+                    f"{idx.strftime('%Y-%m-%d')}<br>"
+                    f"开盘: {o:.4f}<br>"
+                    f"最高: {h:.4f}<br>"
+                    f"最低: {lo:.4f}<br>"
+                    f"收盘: {c:.4f}"
+                )
+                for idx, o, h, lo, c in zip(
+                    df.index, df["open"], df["high"], df["low"], df["close"]
+                )
+            ],
+            hoverinfo="text",
+            hovertemplate="%{text}<extra></extra>",
         ),
         row=1, col=1,
     )
+    # 均线/布林带不抢 K 线 hover
     for ov in overlays:
         if ov.startswith("ma"):
             n = int(ov[2:])
-            fig.add_trace(go.Scatter(x=df.index, y=ta.ma(df["close"], n),
-                                     name=f"MA{n}", line=dict(width=1)), row=1, col=1)
+            fig.add_trace(go.Scatter(
+                x=df.index, y=ta.ma(df["close"], n),
+                name=f"MA{n}", line=dict(width=1), hoverinfo="skip",
+            ), row=1, col=1)
         elif ov == "boll":
             up, mid, low = ta.boll(df["close"])
             for y, nm in [(up, "BOLL上"), (mid, "BOLL中"), (low, "BOLL下")]:
-                fig.add_trace(go.Scatter(x=df.index, y=y, name=nm,
-                                         line=dict(width=1, dash="dot")), row=1, col=1)
-    fig.add_trace(go.Bar(x=df.index, y=df["volume"], name="成交量"), row=2, col=1)
+                fig.add_trace(go.Scatter(
+                    x=df.index, y=y, name=nm,
+                    line=dict(width=1, dash="dot"), hoverinfo="skip",
+                ), row=1, col=1)
+    fig.add_trace(go.Bar(x=df.index, y=df["volume"], name="成交量",
+                         hovertemplate="%{x|%Y-%m-%d}<br>成交量: %{y}<extra></extra>"),
+                  row=2, col=1)
 
     r = 3
     for name in sub:
@@ -63,7 +77,9 @@ def kline_chart(df, overlays=("ma5", "ma20", "boll"), sub=("macd", "rsi"), drawa
 
     fig.update_layout(
         height=800,
-        dragmode="drawline" if drawable else "zoom",
+        # 默认 zoom，悬停才能出 tip；画线从右上角 modebar 点选
+        dragmode="zoom",
+        hovermode="x",
         newshape=dict(line_color="orange"),
         modebar_add=["drawline", "drawopenpath", "eraseshape"] if drawable else [],
         legend=dict(orientation="h"),

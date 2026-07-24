@@ -27,9 +27,13 @@ def test_kline_cn_colors_and_hover():
     candle = next(t for t in fig.data if t.type == "candlestick")
     assert candle.increasing.line.color == "#ef5350"
     assert candle.decreasing.line.color == "#26a69a"
-    ht = candle.hovertemplate or ""
+    assert candle.hoverinfo == "text"
+    assert candle.text is not None and len(candle.text) > 0
+    sample = candle.text[0]
     for label in ("开盘", "最高", "最低", "收盘"):
-        assert label in ht
+        assert label in sample
+    assert fig.layout.dragmode == "zoom"  # 默认 zoom 才能悬停出 tip
+    assert fig.layout.hovermode == "x"
 
 
 def test_backtest_chart():
@@ -49,10 +53,9 @@ def test_concentration_chart():
 
 def test_kline_has_drawtools_and_timeline():
     fig = plots.kline_chart(_df())
-    assert fig.layout.dragmode == "drawline"
-    # 最底部子图启用了 rangeslider（时间轴拖拽条）
-    sliders = [ax.rangeslider.visible for ax in fig.layout.to_plotly_json()["xaxis"].keys()] if False else None
-    # 至少一个 x 轴的 rangeslider 可见，且主图有 rangeselector
+    assert fig.layout.dragmode == "zoom"
+    # 画线工具仍在 modebar，需要时点选
+    assert "drawline" in (fig.layout.modebar.add or [])
     layout = fig.layout.to_plotly_json()
     any_slider = any(
         isinstance(v, dict) and v.get("rangeslider", {}).get("visible")
