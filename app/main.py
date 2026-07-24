@@ -50,7 +50,8 @@ with st.sidebar:
         st.stop()
     picked = st.selectbox("股票", options)
     ts_code = picked.split("  ")[0]
-    start = st.date_input("开始", pd.Timestamp("2022-01-01")).strftime("%Y%m%d")
+    _default_start = pd.Timestamp.today() - pd.DateOffset(months=6)
+    start = st.date_input("开始", _default_start).strftime("%Y%m%d")
     end = st.date_input("结束", pd.Timestamp.today()).strftime("%Y%m%d")
 
 tab1, tab2, tab3 = st.tabs(["行情分析", "资金集中度", "策略回测"])
