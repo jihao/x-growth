@@ -12,3 +12,5 @@ def test_app_module_imports():
     assert "kline_chart" in src
     assert "backtest_chart" in src
     assert "concentration_chart" in src
+    assert "find_trendlines" in src
+    assert "即将支持" in src
