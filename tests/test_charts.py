@@ -83,3 +83,20 @@ def test_concentration_detail_chart_uses_cross_section_amount():
     })
     fig = plots.concentration_detail_chart(cross, top=10)
     assert isinstance(fig, go.Figure)
+
+
+def test_overlay_trendlines_adds_traces():
+    from quant.structure.models import Trendline, TrendlineResult
+
+    df = _df(60)
+    fig0 = plots.kline_chart(df, overlays=(), sub=())
+    n0 = len(fig0.data)
+    tl = Trendline(
+        side="up", slope=0.01, intercept=10.0,
+        touch_dates=[df.index[10], df.index[30]],
+        touch_count=2, score=20.0,
+        start_date=df.index[10], end_date=df.index[30],
+    )
+    result = TrendlineResult(up=[tl], down=[], best_up=tl, best_down=None)
+    fig1 = plots.overlay_trendlines(fig0, df, result)
+    assert len(fig1.data) > n0
