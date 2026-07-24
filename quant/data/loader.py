@@ -14,6 +14,15 @@ def _conn():
     return connect_mysql()
 
 
+def _read_df(conn, sql: str, params=None) -> pd.DataFrame:
+    """用游标执行查询并构造 DataFrame，避免 pandas 对裸 DBAPI 连接的告警。"""
+    with conn.cursor() as cur:
+        cur.execute(sql, params or ())
+        rows = cur.fetchall()
+        cols = [c[0] for c in cur.description]
+    return pd.DataFrame(list(rows), columns=cols)
+
+
 def _normalize_daily(df_raw: pd.DataFrame) -> pd.DataFrame:
     if df_raw is None or df_raw.empty:
         return pd.DataFrame(
@@ -38,7 +47,7 @@ def load_daily(ts_code: str, start=None, end=None) -> pd.DataFrame:
     )
     conn = _conn()
     try:
-        df = pd.read_sql(sql, conn, params=(ts_code, s, e))
+        df = _read_df(conn, sql, (ts_code, s, e))
     finally:
         conn.close()
     return _normalize_daily(df)
@@ -53,7 +62,7 @@ def load_cross_section(date) -> pd.DataFrame:
     )
     conn = _conn()
     try:
-        df = pd.read_sql(sql, conn, params=(d,))
+        df = _read_df(conn, sql, (d,))
     finally:
         conn.close()
     if not df.empty:
@@ -66,7 +75,7 @@ def load_cross_section(date) -> pd.DataFrame:
 def list_stocks() -> pd.DataFrame:
     conn = _conn()
     try:
-        return pd.read_sql("SELECT ts_code, name FROM stocks ORDER BY ts_code", conn)
+        return _read_df(conn, "SELECT ts_code, name FROM stocks ORDER BY ts_code")
     finally:
         conn.close()
 
@@ -79,7 +88,9 @@ def trading_dates(start, end) -> list[str]:
     )
     conn = _conn()
     try:
-        df = pd.read_sql(sql, conn, params=(s, e))
+        df = _read_df(conn, sql, (s, e))
     finally:
         conn.close()
+    if df.empty:
+        return []
     return df["trade_date"].astype(str).tolist()

@@ -4,6 +4,7 @@ from __future__ import annotations
 import pandas as pd
 
 from quant import config  # noqa: F401
+from quant.data.loader import _read_df
 from mysql_config import connect_mysql, load_dotenv
 
 TABLE = config.CONCENTRATION_TABLE
@@ -62,15 +63,18 @@ def read_series(start=None, end=None) -> pd.DataFrame:
     e = config.fmt_date(end) if end else "99991231"
     conn = _conn()
     try:
-        df = pd.read_sql(
+        df = _read_df(
+            conn,
             f"SELECT * FROM {TABLE} WHERE trade_date BETWEEN %s AND %s ORDER BY trade_date",
-            conn, params=(s, e),
+            (s, e),
         )
     finally:
         conn.close()
     if not df.empty:
         df["trade_date"] = pd.to_datetime(df["trade_date"].astype(str), format="%Y%m%d")
         df = df.set_index("trade_date")
+        for col in df.columns:  # DECIMAL 以 Decimal 返回，统一转 float 便于绘图
+            df[col] = df[col].astype(float)
     return df
 
 
