@@ -33,7 +33,8 @@ def _normalize_daily(df_raw: pd.DataFrame) -> pd.DataFrame:
     df = df.set_index("trade_date").sort_index()
     for col in ["open", "high", "low", "close", "amount"]:
         df[col] = df[col].astype(float)
-    df["volume"] = df["volume"].astype("int64")
+    # volume 可能为 NULL（停牌/缺失），先补 0 再转整型，避免 IntCastingNaNError
+    df["volume"] = df["volume"].fillna(0).astype("int64")
     return df[_DAILY_COLS]
 
 
@@ -68,7 +69,8 @@ def load_cross_section(date) -> pd.DataFrame:
     if not df.empty:
         df["close"] = df["close"].astype(float)
         df["amount"] = df["amount"].astype(float)
-        df["volume"] = df["volume"].astype("int64")
+        # volume 可能为 NULL（停牌/缺失），先补 0 再转整型
+        df["volume"] = df["volume"].fillna(0).astype("int64")
     return df
 
 
