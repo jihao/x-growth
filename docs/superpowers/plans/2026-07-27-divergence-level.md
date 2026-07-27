@@ -481,6 +481,6 @@ git commit -m "feat(app): show divergence level and preferred caption"
 
 **Spec coverage:** speed/span/level/preferred、同侧分档边界、择优规则、preferred_event、明细+caption、不改 confirm/overlay → Task 1–3 ✅  
 
-**Placeholder scan:** Task 2 草稿中有一段「错误循环」说明——实现时只保留最终版；计划内无 TBD  
+**Placeholder scan:** 无 TBD  
 
 **Type consistency:** `level` 英文枚举 + UI `LEVEL_CN`；`annotate_levels -> (list, preferred|None)`；`analyze_divergence` 增 `q_slow/q_fast/near_pct` 与 spec 一致

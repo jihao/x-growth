@@ -1,7 +1,7 @@
 # 结构分析 · 背离级别设计
 
 日期：2026-07-27  
-状态：已确认设计，待写实现计划  
+状态：已确认设计；实现计划见 `docs/superpowers/plans/2026-07-27-divergence-level.md`  
 范围：在已有 DIF 背离上增加价格速度级别（强/中/弱）与同侧择优；复用现有 events；本地 Streamlit
 
 ## 背景
