@@ -71,9 +71,14 @@ class DivergenceEvent:
     d2_date: Any
     confirm_date: Any | None = None
     confirm_dif: float | None = None
+    speed: float = 0.0
+    span_bars: int = 0
+    level: str = "medium"  # strong | medium | weak
+    preferred: bool = False
 
 
 @dataclass
 class DivergenceResult:
     events: list[DivergenceEvent] = field(default_factory=list)
     overlay_events: list[DivergenceEvent] = field(default_factory=list)
+    preferred_event: DivergenceEvent | None = None
