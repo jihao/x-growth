@@ -214,3 +214,31 @@ def overlay_waves(fig, df, triple):
         row=1, col=1,
     )
     return fig
+
+
+def overlay_divergence(fig, df, events):
+    """叠加 DIF 背离两触点连线（价位）。"""
+    for i, ev in enumerate(events):
+        color = "#ef5350" if ev.side == "top" else "#26a69a"
+        dash = "dot" if ev.status == "pending" else "solid"
+        side_cn = "顶" if ev.side == "top" else "底"
+        st_cn = "钝化" if ev.status == "pending" else "确认"
+        fig.add_trace(
+            go.Scatter(
+                x=[ev.p1_date, ev.p2_date],
+                y=[ev.p1_price, ev.p2_price],
+                mode="lines+markers",
+                name=f"{side_cn}背离·{st_cn}",
+                line=dict(color=color, width=2, dash=dash),
+                marker=dict(size=8, color=color),
+                hovertemplate=(
+                    f"{side_cn}背离({st_cn})<br>"
+                    "%{x|%Y-%m-%d}: %{y:.4f}<extra></extra>"
+                ),
+                legendgroup=f"div-{ev.side}-{i}",
+                showlegend=True,
+            ),
+            row=1,
+            col=1,
+        )
+    return fig

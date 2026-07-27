@@ -118,3 +118,25 @@ def test_overlay_waves_adds_traces():
     n0 = len(fig0.data)
     fig1 = plots.overlay_waves(fig0, df, triple)
     assert len(fig1.data) > n0
+
+
+def test_overlay_divergence_adds_traces():
+    from quant.structure.models import DivergenceEvent
+
+    df = _df(40)
+    ev = DivergenceEvent(
+        side="top",
+        status="pending",
+        p1_date=df.index[10],
+        p1_price=float(df["high"].iloc[10]),
+        d1=1.0,
+        d1_date=df.index[10],
+        p2_date=df.index[25],
+        p2_price=float(df["high"].iloc[25]),
+        d2=0.8,
+        d2_date=df.index[25],
+    )
+    fig0 = plots.kline_chart(df, overlays=(), sub=())
+    n0 = len(fig0.data)
+    fig1 = plots.overlay_divergence(fig0, df, [ev])
+    assert len(fig1.data) > n0
