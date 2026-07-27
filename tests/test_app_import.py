@@ -19,6 +19,8 @@ def test_app_module_imports():
     assert "analyze_wave_speed" in src
     assert "DIF 背离" in src
     assert "analyze_divergence" in src
+    assert "优先关注" in src
+    assert "缓=强" in src or "缓涨/缓跌" in src  # 参数说明含「缓=强」
     assert "结构分析" in src
     assert "tab1_collapse_right" in src
     assert "tab1_collapse_left" in src

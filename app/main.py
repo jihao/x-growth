@@ -178,6 +178,7 @@ with tab1:
 2. **底背离**：价格低点下移，但 DIF 低点抬升。
 3. 价格创新高/新低而 DIF 不同步 → **钝化（pending）**；之后 DIF 自极值反向离开达 `confirm_pct` → **确认（confirmed）**。
 4. 图上画全部钝化 + 最近 1 条已确认；明细表列出全部事件。
+5. **级别**：P1→P2 价格速度越慢（缓涨/缓跌）→ 强；同侧多个背离优先更慢、更靠近当前的一个。
                         """.strip()
                     )
                     st.number_input(
@@ -308,7 +309,7 @@ with tab1:
                 })
 
         if auto_div:
-            from quant.structure.divergence import analyze_divergence
+            from quant.structure.divergence import LEVEL_CN, analyze_divergence
 
             dres = analyze_divergence(
                 df,
@@ -321,16 +322,27 @@ with tab1:
                 mid_infos.append("区间内未识别到 DIF 背离（钝化/确认）。")
             else:
                 fig = plots.overlay_divergence(fig, df, dres.overlay_events)
-                last = dres.events[-1]
-                side_cn = "顶" if last.side == "top" else "底"
-                if last.status == "confirmed":
-                    mid_infos.append(f"{side_cn}背离已确认")
+                pe = dres.preferred_event
+                if pe is not None:
+                    side_cn = "顶" if pe.side == "top" else "底"
+                    st_cn = "确认" if pe.status == "confirmed" else "钝化"
+                    lv = LEVEL_CN.get(pe.level, pe.level)
+                    mid_infos.append(f"优先关注：{side_cn}背离·{lv}（{st_cn}）")
                 else:
-                    mid_infos.append(f"{side_cn}背离钝化中")
+                    last = dres.events[-1]
+                    side_cn = "顶" if last.side == "top" else "底"
+                    if last.status == "confirmed":
+                        mid_infos.append(f"{side_cn}背离已确认")
+                    else:
+                        mid_infos.append(f"{side_cn}背离钝化中")
                 for ev in dres.events:
                     div_rows.append({
                         "类型": "顶" if ev.side == "top" else "底",
                         "状态": "确认" if ev.status == "confirmed" else "钝化",
+                        "级别": LEVEL_CN.get(ev.level, ev.level),
+                        "优先": "是" if ev.preferred else "否",
+                        "速度": round(ev.speed, 4),
+                        "跨度": ev.span_bars,
                         "P1": str(ev.p1_date)[:10],
                         "P1价": round(ev.p1_price, 4),
                         "D1": round(ev.d1, 4),
