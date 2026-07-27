@@ -100,3 +100,21 @@ def test_overlay_trendlines_adds_traces():
     result = TrendlineResult(up=[tl], down=[], best_up=tl, best_down=None)
     fig1 = plots.overlay_trendlines(fig0, df, result)
     assert len(fig1.data) > n0
+
+
+def test_overlay_waves_adds_traces():
+    from quant.structure.models import WaveLeg, WaveTriple
+
+    df = _df(40)
+    piv = [(df.index[5], 10.0, "L"), (df.index[15], 12.0, "H"),
+           (df.index[25], 11.0, "L"), (df.index[35], 14.0, "H")]
+    legs = [
+        WaveLeg(piv[0][0], piv[1][0], 10, 12, 10, 0.2, 0.2),
+        WaveLeg(piv[1][0], piv[2][0], 12, 11, 10, 0.1, -1/12),
+        WaveLeg(piv[2][0], piv[3][0], 11, 14, 10, 0.3, 3/11),
+    ]
+    triple = WaveTriple("up", piv, legs, 1.5, "extend")
+    fig0 = plots.kline_chart(df, overlays=(), sub=())
+    n0 = len(fig0.data)
+    fig1 = plots.overlay_waves(fig0, df, triple)
+    assert len(fig1.data) > n0

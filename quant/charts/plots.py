@@ -194,3 +194,23 @@ def overlay_trendlines(fig, df, result):
     for i, tl in enumerate(result.down):
         add_line(tl, "#4db6ac", f"下降趋势{i + 1}")
     return fig
+
+
+def overlay_waves(fig, df, triple):
+    """叠加 N 字三浪拐点与连线。"""
+    color = "#e57373" if triple.direction == "up" else "#4db6ac"
+    xs = [p[0] for p in triple.pivots]
+    ys = [p[1] for p in triple.pivots]
+    labels = ["浪1起", "浪1终", "浪2终", "浪3终"]
+    fig.add_trace(
+        go.Scatter(
+            x=xs, y=ys, mode="lines+markers+text",
+            name="浪型",
+            line=dict(color=color, width=2, dash="dash"),
+            marker=dict(size=9, color=color),
+            text=labels, textposition="top center",
+            hovertemplate="%{x|%Y-%m-%d}<br>%{text}: %{y:.4f}<extra></extra>",
+        ),
+        row=1, col=1,
+    )
+    return fig
