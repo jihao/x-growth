@@ -136,6 +136,7 @@ with tab1:
                 """.strip()
             )
             w_window = st.number_input("wave_window", min_value=2, max_value=20, value=5, step=1)
+            w_min_pct = st.number_input("min_pct", min_value=0.0, max_value=0.1, value=0.01, format="%.3f", step=0.005)
             w_fast = st.number_input("fast_ratio", min_value=1.0, max_value=2.0, value=1.05, format="%.2f")
             w_slow = st.number_input("slow_ratio", min_value=0.5, max_value=1.0, value=0.95, format="%.2f")
             wave_seg = st.selectbox("浪型段", ["最近一段", "再前一段"])
@@ -144,15 +145,20 @@ with tab1:
         if auto_wave:
             from quant.structure.waves import analyze_wave_speed
 
+            wave_offset = 0 if wave_seg == "最近一段" else 1
             wres = analyze_wave_speed(
                 df,
-                offset=0 if wave_seg == "最近一段" else 1,
+                offset=wave_offset,
                 window=int(w_window),
+                min_pct=float(w_min_pct),
                 fast_ratio=float(w_fast),
                 slow_ratio=float(w_slow),
             )
             if wres.current is None:
-                st.info("区间内有效三浪不足，无法做浪型速度分析。")
+                if wave_offset == 1:
+                    st.info("没有更早的一段已确认三浪。")
+                else:
+                    st.info("区间内有效三浪不足，无法做浪型速度分析。")
             else:
                 t = wres.current
                 fig = plots.overlay_waves(fig, df, t)

@@ -96,6 +96,34 @@ def test_offset_one_picks_earlier_triple():
     assert r0.current.pivots[-1][0] > r1.current.pivots[-1][0]
 
 
+def test_down_triple_extend_when_wave3_faster():
+    # H-L-H-L：浪1 慢跌、浪3 快跌 → extend
+    specs = [(5, 16.0, "H"), (15, 14.0, "L"), (25, 15.0, "H"), (30, 10.0, "L")]
+    df = _make_pivot_df(33, specs)
+    res = waves.analyze_wave_speed(df, offset=0, window=2, min_pct=0.0)
+    assert res.current is not None
+    assert res.current.direction == "down"
+    assert res.current.verdict == "extend"
+    assert res.current.ratio >= 1.05
+    assert res.current.legs[0].end_price < res.current.legs[0].start_price
+    assert res.current.legs[2].end_price < res.current.legs[2].start_price
+    assert res.current.pivots[-1][0] == df.index[specs[-1][0]]
+
+
+def test_down_triple_end_when_wave3_slower():
+    # 浪3 跌幅小、耗时长 → 更慢；min_pct 滤除基线噪声
+    specs = [(5, 16.0, "H"), (12, 10.0, "L"), (18, 14.0, "H"), (40, 13.0, "L")]
+    df = _make_pivot_df(48, specs)
+    res = waves.analyze_wave_speed(df, offset=0, window=2, min_pct=0.01)
+    assert res.current is not None
+    assert res.current.direction == "down"
+    assert res.current.verdict == "end"
+    assert res.current.ratio <= 0.95
+    assert res.current.legs[0].end_price < res.current.legs[0].start_price
+    assert res.current.legs[2].end_price < res.current.legs[2].start_price
+    assert res.current.pivots[-1][0] == df.index[specs[-1][0]]
+
+
 def test_insufficient_pivots_returns_empty():
     df = _df_ohlc(np.linspace(10, 11, 15))
     res = waves.analyze_wave_speed(df, offset=0, window=5, min_pct=0.01)
