@@ -123,10 +123,70 @@ with tab1:
                         "状态": tl.status or "",
                         "触点日": ", ".join(str(d)[:10] for d in tl.touch_dates),
                     })
+        auto_wave = st.checkbox("浪型速度", value=True)
+        with st.expander("浪型参数", expanded=False):
+            st.markdown(
+                """
+**浪型速度怎么算？**
+
+1. 用波段高低点串成拐点，切出 N 字三浪（上涨 L-H-L-H / 下跌 H-L-H-L）。
+2. 单浪速度 = |价格变化| / 根数；比较**第三浪 vs 第一浪**。
+3. 第三浪更快 → 倾向仍有第五浪；更慢 → 倾向止于三浪。
+4. 「再前一段」查看时间上更早的一段已确认三浪。
+                """.strip()
+            )
+            w_window = st.number_input("wave_window", min_value=2, max_value=20, value=5, step=1)
+            w_fast = st.number_input("fast_ratio", min_value=1.0, max_value=2.0, value=1.05, format="%.2f")
+            w_slow = st.number_input("slow_ratio", min_value=0.5, max_value=1.0, value=0.95, format="%.2f")
+            wave_seg = st.selectbox("浪型段", ["最近一段", "再前一段"])
+
+        wave_rows = []
+        if auto_wave:
+            from quant.structure.waves import analyze_wave_speed
+
+            wres = analyze_wave_speed(
+                df,
+                offset=0 if wave_seg == "最近一段" else 1,
+                window=int(w_window),
+                fast_ratio=float(w_fast),
+                slow_ratio=float(w_slow),
+            )
+            if wres.current is None:
+                st.info("区间内有效三浪不足，无法做浪型速度分析。")
+            else:
+                t = wres.current
+                fig = plots.overlay_waves(fig, df, t)
+                verdict_cn = {
+                    "extend": "倾向仍有第五浪",
+                    "end": "倾向止于三浪",
+                    "similar": "速度接近，需结合更大周期",
+                }[t.verdict]
+                dir_cn = "上涨" if t.direction == "up" else "下跌"
+                st.info(
+                    f"{dir_cn}三浪 · 第三浪/第一浪速度比={t.ratio:.2f} → {verdict_cn}"
+                )
+                for i, leg in enumerate(t.legs, 1):
+                    wave_rows.append({
+                        "浪": i,
+                        "起点": str(leg.start_date)[:10],
+                        "终点": str(leg.end_date)[:10],
+                        "根数": leg.bars,
+                        "速度": round(leg.speed, 4),
+                        "涨跌幅": f"{leg.ret:.2%}",
+                    })
+                wave_rows.append({
+                    "浪": "结论",
+                    "起点": "", "终点": "", "根数": "",
+                    "速度": round(t.ratio, 4),
+                    "涨跌幅": verdict_cn,
+                })
         st.plotly_chart(fig, width="stretch")
         if detail_rows:
             with st.expander("趋势线明细", expanded=True):
                 st.dataframe(pd.DataFrame(detail_rows), width="stretch")
+        if wave_rows:
+            with st.expander("浪型明细", expanded=True):
+                st.dataframe(pd.DataFrame(wave_rows), width="stretch")
 
 with tab2:
     st.subheader("市场资金集中度（历史）")

@@ -15,3 +15,5 @@ def test_app_module_imports():
     assert "find_trendlines" in src
     assert "即将支持" in src
     assert "起点 / 终点怎么定" in src
+    assert "浪型速度" in src
+    assert "analyze_wave_speed" in src
