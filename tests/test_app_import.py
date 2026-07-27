@@ -17,3 +17,5 @@ def test_app_module_imports():
     assert "起点 / 终点怎么定" in src
     assert "浪型速度" in src
     assert "analyze_wave_speed" in src
+    assert "DIF 背离" in src
+    assert "analyze_divergence" in src
