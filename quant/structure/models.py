@@ -1,4 +1,4 @@
-"""趋势线数据结构。"""
+"""结构分析数据结构。"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -29,3 +29,29 @@ class TrendlineResult:
     down: list[Trendline] = field(default_factory=list)
     best_up: Trendline | None = None
     best_down: Trendline | None = None
+
+
+@dataclass
+class WaveLeg:
+    start_date: Any
+    end_date: Any
+    start_price: float
+    end_price: float
+    bars: int
+    speed: float
+    ret: float
+
+
+@dataclass
+class WaveTriple:
+    direction: str  # "up" | "down"
+    pivots: list[Any]  # 4 个 (date, price, kind)
+    legs: list[WaveLeg]
+    ratio: float
+    verdict: str  # "extend" | "end" | "similar"
+
+
+@dataclass
+class WaveSpeedResult:
+    current: WaveTriple | None = None
+    previous_available: bool = False
