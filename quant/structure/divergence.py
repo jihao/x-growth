@@ -94,8 +94,18 @@ def annotate_levels(
     prefs: list[DivergenceEvent] = []
     for side in ("top", "bottom"):
         side_evs = [e for e in filled if e.side == side]
-        leveled = assign_levels_for_side(side_evs, q_slow=q_slow, q_fast=q_fast)
-        pref = pick_preferred(leveled, near_pct=near_pct)
+        valid_evs = [e for e in side_evs if e.span_bars > 0]
+        missing_evs = [e for e in side_evs if e.span_bars == 0]
+        leveled_valid = assign_levels_for_side(
+            valid_evs, q_slow=q_slow, q_fast=q_fast
+        )
+        leveled_missing = [replace(e, level="medium") for e in missing_evs]
+        leveled = leveled_valid + leveled_missing
+        pref = (
+            pick_preferred(leveled_valid, near_pct=near_pct)
+            if leveled_valid
+            else None
+        )
         for e in leveled:
             is_pref = (
                 pref is not None

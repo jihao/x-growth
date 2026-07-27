@@ -70,6 +70,31 @@ def test_preferred_event_later_across_sides():
     assert pref is not None and pref.side == "bottom" and pref.p2_date == idx[35]
 
 
+def test_missing_dates_medium_not_preferred():
+    df = _df(20)
+    idx = df.index
+    valid = _ev("bottom", 2, 12.0, 12, 11.0, idx)
+    missing = DivergenceEvent(
+        side="bottom",
+        status="pending",
+        p1_date=pd.Timestamp("2019-01-01"),
+        p1_price=12.0,
+        d1=1.0,
+        d1_date=pd.Timestamp("2019-01-01"),
+        p2_date=pd.Timestamp("2019-06-01"),
+        p2_price=11.0,
+        d2=0.8,
+        d2_date=pd.Timestamp("2019-06-01"),
+    )
+    annotated, pref = div.annotate_levels(df, [missing, valid])
+    by_p1 = {e.p1_date: e for e in annotated}
+    assert by_p1[missing.p1_date].level == "medium"
+    assert by_p1[missing.p1_date].preferred is False
+    assert by_p1[missing.p1_date].speed == 0.0
+    assert by_p1[missing.p1_date].span_bars == 0
+    assert pref is not None and pref.p1_date == valid.p1_date
+
+
 def test_analyze_divergence_fills_levels():
     df = _df(80)
     # 注入手工 pivots 路径：直接测 annotate 已覆盖；这里确保 analyze 返回 preferred_event 字段存在
