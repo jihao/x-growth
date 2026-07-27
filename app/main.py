@@ -61,17 +61,55 @@ with tab1:
     if df.empty:
         st.warning("该区间无数据。")
     else:
-        overlays = st.multiselect("叠加", ["ma5", "ma10", "ma20", "ma60", "boll"],
-                                  default=["ma5", "ma20", "boll"])
-        sub = st.multiselect("副图", ["macd", "rsi"], default=["macd", "rsi"])
-        period = st.selectbox("周期", ["日线", "周线（即将支持）"])
-        if period.startswith("周线"):
-            st.caption("周线趋势线即将支持；以下仍按日线计算。")
+        # 三列：左=图设置（可收到最左），中=K线，右=结构分析（可收到最右）
+        if "tab1_left_open" not in st.session_state:
+            st.session_state.tab1_left_open = True
+        if "tab1_right_open" not in st.session_state:
+            st.session_state.tab1_right_open = True
+        left_w = 1.35 if st.session_state.tab1_left_open else 0.18
+        right_w = 1.55 if st.session_state.tab1_right_open else 0.18
+        col_left, col_mid, col_right = st.columns(
+            [left_w, 5.0, right_w], gap="small"
+        )
 
-        auto_tl = st.checkbox("自动趋势线", value=True)
-        with st.expander("趋势线参数", expanded=False):
-            st.markdown(
-                """
+        with col_left:
+            if st.session_state.tab1_left_open:
+                if st.button("◀ 收起", key="tab1_collapse_left", help="收起到最左"):
+                    st.session_state.tab1_left_open = False
+                    st.rerun()
+                st.markdown("**图设置**")
+                overlays = st.multiselect(
+                    "叠加", ["ma5", "ma10", "ma20", "ma60", "boll"],
+                    default=["ma5", "ma20", "boll"], key="tab1_overlays",
+                )
+                sub = st.multiselect(
+                    "副图", ["macd", "rsi"], default=["macd", "rsi"], key="tab1_sub",
+                )
+                period = st.selectbox(
+                    "周期", ["日线", "周线（即将支持）"], key="tab1_period",
+                )
+                if period.startswith("周线"):
+                    st.caption("周线趋势线即将支持；以下仍按日线计算。")
+            else:
+                if st.button("▶", key="tab1_expand_left", help="展开左栏"):
+                    st.session_state.tab1_left_open = True
+                    st.rerun()
+                overlays = st.session_state.get(
+                    "tab1_overlays", ["ma5", "ma20", "boll"]
+                )
+                sub = st.session_state.get("tab1_sub", ["macd", "rsi"])
+                period = st.session_state.get("tab1_period", "日线")
+
+        with col_right:
+            if st.session_state.tab1_right_open:
+                if st.button("收起 ▶", key="tab1_collapse_right", help="收起到最右"):
+                    st.session_state.tab1_right_open = False
+                    st.rerun()
+                st.markdown("**结构分析**")
+                auto_tl = st.checkbox("自动趋势线", value=True, key="tab1_auto_tl")
+                with st.expander("趋势线参数", expanded=False):
+                    st.markdown(
+                        """
 **起点 / 终点怎么定？**
 
 1. 先用 `window` 在日线 `high`/`low` 上找波段高低点（左右各确认若干根 K 线）。
@@ -79,31 +117,131 @@ with tab1:
    **下降趋势线**：在波段**高点**里任取两点连线，且斜率必须为负。
 3. 明细表里的 **起点 / 终点** = 这条线用来定直线的那两个波段点（按时间早晚排序），图上线段也画在这两点之间。
 4. **触点** = 落在该直线容差 `tol` 内的其它波段点（含起终点），触点越多得分越高；`min_bars` 限制两点至少隔多少根 K 线；`top_k` 为上升/下降各保留几条。
-                """.strip()
-            )
-            tl_window = st.number_input("window", min_value=2, max_value=20, value=5, step=1)
-            tl_tol = st.number_input("tol", min_value=0.001, max_value=0.1, value=0.015, format="%.3f")
-            tl_top_k = st.number_input("top_k", min_value=1, max_value=10, value=3, step=1)
-            tl_min_bars = st.number_input("min_bars", min_value=3, max_value=60, value=10, step=1)
+                        """.strip()
+                    )
+                    st.number_input(
+                        "window", min_value=2, max_value=20, value=5, step=1,
+                        key="tab1_tl_window",
+                    )
+                    st.number_input(
+                        "tol", min_value=0.001, max_value=0.1, value=0.015,
+                        format="%.3f", key="tab1_tl_tol",
+                    )
+                    st.number_input(
+                        "top_k", min_value=1, max_value=10, value=3, step=1,
+                        key="tab1_tl_top_k",
+                    )
+                    st.number_input(
+                        "min_bars", min_value=3, max_value=60, value=10, step=1,
+                        key="tab1_tl_min_bars",
+                    )
+
+                auto_wave = st.checkbox("浪型速度", value=True, key="tab1_auto_wave")
+                with st.expander("浪型参数", expanded=False):
+                    st.markdown(
+                        """
+**浪型速度怎么算？**
+
+1. 用波段高低点串成拐点，切出 N 字三浪（上涨 L-H-L-H / 下跌 H-L-H-L）。
+2. 单浪速度 = |价格变化| / 根数；比较**第三浪 vs 第一浪**。
+3. 第三浪更快 → 倾向仍有第五浪；更慢 → 倾向止于三浪。
+4. 「再前一段」查看时间上更早的一段已确认三浪。
+                        """.strip()
+                    )
+                    st.number_input(
+                        "wave_window", min_value=2, max_value=20, value=5, step=1,
+                        key="tab1_w_window",
+                    )
+                    st.number_input(
+                        "min_pct", min_value=0.0, max_value=0.1, value=0.01,
+                        format="%.3f", step=0.005, key="tab1_w_min_pct",
+                    )
+                    st.number_input(
+                        "fast_ratio", min_value=1.0, max_value=2.0, value=1.05,
+                        format="%.2f", key="tab1_w_fast",
+                    )
+                    st.number_input(
+                        "slow_ratio", min_value=0.5, max_value=1.0, value=0.95,
+                        format="%.2f", key="tab1_w_slow",
+                    )
+                    st.selectbox(
+                        "浪型段", ["最近一段", "再前一段"], key="tab1_wave_seg",
+                    )
+
+                auto_div = st.checkbox("DIF 背离", value=True, key="tab1_auto_div")
+                with st.expander("背离参数", expanded=False):
+                    st.markdown(
+                        """
+**DIF 背离怎么看？**
+
+1. **顶背离**：价格高点抬升，但 MACD 的 DIF 高点下降。
+2. **底背离**：价格低点下移，但 DIF 低点抬升。
+3. 价格创新高/新低而 DIF 不同步 → **钝化（pending）**；之后 DIF 自极值反向离开达 `confirm_pct` → **确认（confirmed）**。
+4. 图上画全部钝化 + 最近 1 条已确认；明细表列出全部事件。
+                        """.strip()
+                    )
+                    st.number_input(
+                        "div_window", min_value=2, max_value=20, value=5, step=1,
+                        key="tab1_d_window",
+                    )
+                    st.number_input(
+                        "div_min_pct", min_value=0.0, max_value=0.1, value=0.01,
+                        format="%.3f", step=0.005, key="tab1_d_min_pct",
+                    )
+                    st.number_input(
+                        "align_bars", min_value=0, max_value=10, value=3, step=1,
+                        key="tab1_d_align",
+                    )
+                    st.number_input(
+                        "confirm_pct", min_value=0.01, max_value=0.5, value=0.05,
+                        format="%.2f", step=0.01, key="tab1_d_confirm",
+                    )
+            else:
+                if st.button("◀", key="tab1_expand_right", help="展开右栏"):
+                    st.session_state.tab1_right_open = True
+                    st.rerun()
+                auto_tl = st.session_state.get("tab1_auto_tl", True)
+                auto_wave = st.session_state.get("tab1_auto_wave", True)
+                auto_div = st.session_state.get("tab1_auto_div", True)
+
+        # 控件可能在右栏收起时未渲染，统一从 session_state 取值
+        tl_window = int(st.session_state.get("tab1_tl_window", 5))
+        tl_tol = float(st.session_state.get("tab1_tl_tol", 0.015))
+        tl_top_k = int(st.session_state.get("tab1_tl_top_k", 3))
+        tl_min_bars = int(st.session_state.get("tab1_tl_min_bars", 10))
+        w_window = int(st.session_state.get("tab1_w_window", 5))
+        w_min_pct = float(st.session_state.get("tab1_w_min_pct", 0.01))
+        w_fast = float(st.session_state.get("tab1_w_fast", 1.05))
+        w_slow = float(st.session_state.get("tab1_w_slow", 0.95))
+        wave_seg = st.session_state.get("tab1_wave_seg", "最近一段")
+        d_window = int(st.session_state.get("tab1_d_window", 5))
+        d_min_pct = float(st.session_state.get("tab1_d_min_pct", 0.01))
+        d_align = int(st.session_state.get("tab1_d_align", 3))
+        d_confirm = float(st.session_state.get("tab1_d_confirm", 0.05))
 
         fig = plots.kline_chart(df, tuple(overlays), tuple(sub))
         detail_rows = []
+        wave_rows = []
+        div_rows = []
+        mid_infos: list[str] = []
+        mid_warnings: list[str] = []
+
         if auto_tl:
             from quant.structure.trendlines import find_trendlines, evaluate_breakout
 
             res = find_trendlines(
                 df,
-                window=int(tl_window),
-                tol=float(tl_tol),
-                top_k=int(tl_top_k),
-                min_bars=int(tl_min_bars),
+                window=tl_window,
+                tol=tl_tol,
+                top_k=tl_top_k,
+                min_bars=tl_min_bars,
             )
             if res.best_up is None and res.best_down is None:
-                st.info("区间内有效波段点不足，无法拟合趋势线。")
+                mid_infos.append("区间内有效波段点不足，无法拟合趋势线。")
             else:
                 x_today = len(df) - 1
                 res = evaluate_breakout(
-                    res, float(df["close"].iloc[-1]), x_today, tol=float(tl_tol)
+                    res, float(df["close"].iloc[-1]), x_today, tol=tl_tol
                 )
                 fig = plots.overlay_trendlines(fig, df, res)
                 msgs = []
@@ -112,7 +250,7 @@ with tab1:
                 if res.best_down and res.best_down.status == "broken":
                     msgs.append("下降趋势线已升破")
                 if msgs:
-                    st.warning("；".join(msgs))
+                    mid_warnings.append("；".join(msgs))
                 for tl in res.up + res.down:
                     detail_rows.append({
                         "方向": "上升" if tl.side == "up" else "下降",
@@ -123,25 +261,7 @@ with tab1:
                         "状态": tl.status or "",
                         "触点日": ", ".join(str(d)[:10] for d in tl.touch_dates),
                     })
-        auto_wave = st.checkbox("浪型速度", value=True)
-        with st.expander("浪型参数", expanded=False):
-            st.markdown(
-                """
-**浪型速度怎么算？**
 
-1. 用波段高低点串成拐点，切出 N 字三浪（上涨 L-H-L-H / 下跌 H-L-H-L）。
-2. 单浪速度 = |价格变化| / 根数；比较**第三浪 vs 第一浪**。
-3. 第三浪更快 → 倾向仍有第五浪；更慢 → 倾向止于三浪。
-4. 「再前一段」查看时间上更早的一段已确认三浪。
-                """.strip()
-            )
-            w_window = st.number_input("wave_window", min_value=2, max_value=20, value=5, step=1)
-            w_min_pct = st.number_input("min_pct", min_value=0.0, max_value=0.1, value=0.01, format="%.3f", step=0.005)
-            w_fast = st.number_input("fast_ratio", min_value=1.0, max_value=2.0, value=1.05, format="%.2f")
-            w_slow = st.number_input("slow_ratio", min_value=0.5, max_value=1.0, value=0.95, format="%.2f")
-            wave_seg = st.selectbox("浪型段", ["最近一段", "再前一段"])
-
-        wave_rows = []
         if auto_wave:
             from quant.structure.waves import analyze_wave_speed
 
@@ -149,16 +269,16 @@ with tab1:
             wres = analyze_wave_speed(
                 df,
                 offset=wave_offset,
-                window=int(w_window),
-                min_pct=float(w_min_pct),
-                fast_ratio=float(w_fast),
-                slow_ratio=float(w_slow),
+                window=w_window,
+                min_pct=w_min_pct,
+                fast_ratio=w_fast,
+                slow_ratio=w_slow,
             )
             if wres.current is None:
                 if wave_offset == 1:
-                    st.info("没有更早的一段已确认三浪。")
+                    mid_infos.append("没有更早的一段已确认三浪。")
                 else:
-                    st.info("区间内有效三浪不足，无法做浪型速度分析。")
+                    mid_infos.append("区间内有效三浪不足，无法做浪型速度分析。")
             else:
                 t = wres.current
                 fig = plots.overlay_waves(fig, df, t)
@@ -168,7 +288,7 @@ with tab1:
                     "similar": "速度接近，需结合更大周期",
                 }[t.verdict]
                 dir_cn = "上涨" if t.direction == "up" else "下跌"
-                st.info(
+                mid_infos.append(
                     f"{dir_cn}三浪 · 第三浪/第一浪速度比={t.ratio:.2f} → {verdict_cn}"
                 )
                 for i, leg in enumerate(t.legs, 1):
@@ -186,54 +306,27 @@ with tab1:
                     "速度": round(t.ratio, 4),
                     "涨跌幅": verdict_cn,
                 })
-        auto_div = st.checkbox("DIF 背离", value=True)
-        with st.expander("背离参数", expanded=False):
-            st.markdown(
-                """
-**DIF 背离怎么看？**
 
-1. **顶背离**：价格高点抬升，但 MACD 的 DIF 高点下降。
-2. **底背离**：价格低点下移，但 DIF 低点抬升。
-3. 价格创新高/新低而 DIF 不同步 → **钝化（pending）**；之后 DIF 自极值反向离开达 `confirm_pct` → **确认（confirmed）**。
-4. 图上画全部钝化 + 最近 1 条已确认；明细表列出全部事件。
-                """.strip()
-            )
-            d_window = st.number_input(
-                "div_window", min_value=2, max_value=20, value=5, step=1
-            )
-            d_min_pct = st.number_input(
-                "div_min_pct", min_value=0.0, max_value=0.1, value=0.01,
-                format="%.3f", step=0.005,
-            )
-            d_align = st.number_input(
-                "align_bars", min_value=0, max_value=10, value=3, step=1
-            )
-            d_confirm = st.number_input(
-                "confirm_pct", min_value=0.01, max_value=0.5, value=0.05,
-                format="%.2f", step=0.01,
-            )
-
-        div_rows = []
         if auto_div:
             from quant.structure.divergence import analyze_divergence
 
             dres = analyze_divergence(
                 df,
-                window=int(d_window),
-                min_pct=float(d_min_pct),
-                align_bars=int(d_align),
-                confirm_pct=float(d_confirm),
+                window=d_window,
+                min_pct=d_min_pct,
+                align_bars=d_align,
+                confirm_pct=d_confirm,
             )
             if not dres.events:
-                st.info("区间内未识别到 DIF 背离（钝化/确认）。")
+                mid_infos.append("区间内未识别到 DIF 背离（钝化/确认）。")
             else:
                 fig = plots.overlay_divergence(fig, df, dres.overlay_events)
                 last = dres.events[-1]
                 side_cn = "顶" if last.side == "top" else "底"
                 if last.status == "confirmed":
-                    st.info(f"{side_cn}背离已确认")
+                    mid_infos.append(f"{side_cn}背离已确认")
                 else:
-                    st.info(f"{side_cn}背离钝化中")
+                    mid_infos.append(f"{side_cn}背离钝化中")
                 for ev in dres.events:
                     div_rows.append({
                         "类型": "顶" if ev.side == "top" else "底",
@@ -244,9 +337,19 @@ with tab1:
                         "P2": str(ev.p2_date)[:10],
                         "P2价": round(ev.p2_price, 4),
                         "D2": round(ev.d2, 4),
-                        "确认日": str(ev.confirm_date)[:10] if ev.confirm_date is not None else "",
+                        "确认日": (
+                            str(ev.confirm_date)[:10]
+                            if ev.confirm_date is not None else ""
+                        ),
                     })
-        st.plotly_chart(fig, width="stretch")
+
+        with col_mid:
+            st.plotly_chart(fig, width="stretch")
+            for w in mid_warnings:
+                st.warning(w)
+            for info in mid_infos:
+                st.info(info)
+
         if detail_rows:
             with st.expander("趋势线明细", expanded=True):
                 st.dataframe(pd.DataFrame(detail_rows), width="stretch")

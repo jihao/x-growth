@@ -34,6 +34,9 @@ def test_kline_cn_colors_and_hover():
         assert label in sample
     assert fig.layout.dragmode == "zoom"  # 默认 zoom 才能悬停出 tip
     assert fig.layout.hovermode == "x"
+    assert fig.layout.legend.orientation == "h"
+    assert fig.layout.legend.y is not None and fig.layout.legend.y < 0
+    assert fig.layout.margin.b >= 80
 
 
 def test_backtest_chart():

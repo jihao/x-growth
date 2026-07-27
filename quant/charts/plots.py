@@ -82,8 +82,16 @@ def kline_chart(df, overlays=("ma5", "ma20", "boll"), sub=("macd", "rsi"), drawa
         hovermode="x",
         newshape=dict(line_color="orange"),
         modebar_add=["drawline", "drawopenpath", "eraseshape"] if drawable else [],
-        legend=dict(orientation="h"),
-        margin=dict(l=40, r=20, t=30, b=20),
+        # 横向图例放到整图下方，避免叠在主图/副图上
+        legend=dict(
+            orientation="h",
+            yanchor="top",
+            y=-0.12,
+            xanchor="left",
+            x=0,
+            bgcolor="rgba(255,255,255,0.8)",
+        ),
+        margin=dict(l=40, r=20, t=30, b=100),
     )
     # 上方子图关 rangeslider，仅最底部启用作为时间轴拖拽条；主图加区间选择按钮
     fig.update_xaxes(rangeslider_visible=False)
