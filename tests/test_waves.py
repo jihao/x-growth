@@ -48,37 +48,51 @@ def test_verdict_from_ratio():
 
 def test_up_triple_extend_when_wave3_faster():
     # L-H-L-H：浪1 慢、浪3 快（更短 bars 更大涨幅）
-    df = _make_pivot_df(
-        33,
-        [(5, 10.0, "L"), (15, 12.0, "H"), (25, 11.0, "L"), (30, 16.0, "H")],
-    )
+    specs = [(5, 10.0, "L"), (15, 12.0, "H"), (25, 11.0, "L"), (30, 16.0, "H")]
+    df = _make_pivot_df(33, specs)
     res = waves.analyze_wave_speed(df, offset=0, window=2, min_pct=0.0)
     assert res.current is not None
     assert res.current.direction == "up"
     assert res.current.verdict == "extend"
     assert res.current.ratio >= 1.05
+    assert res.current.pivots[-1][0] == df.index[specs[-1][0]]
 
 
 def test_up_triple_end_when_wave3_slower():
-    # 浪3 涨幅小、耗时长 → 更慢
-    df = _make_pivot_df(
-        48,
-        [(5, 10.0, "L"), (12, 16.0, "H"), (18, 14.0, "L"), (40, 15.0, "H")],
-    )
-    res = waves.analyze_wave_speed(df, offset=0, window=2, min_pct=0.0)
+    # 浪3 涨幅小、耗时长 → 更慢；min_pct 滤除基线噪声，保证 offset=0 为 intended 上涨三浪
+    specs = [(5, 10.0, "L"), (12, 16.0, "H"), (18, 14.0, "L"), (40, 15.0, "H")]
+    df = _make_pivot_df(48, specs)
+    res = waves.analyze_wave_speed(df, offset=0, window=2, min_pct=0.01)
     assert res.current is not None
+    assert res.current.direction == "up"
     assert res.current.verdict == "end"
+    assert res.current.ratio <= 0.95
+    assert res.current.pivots[-1][0] == df.index[specs[-1][0]]
 
 
 def test_offset_one_picks_earlier_triple():
-    # 两段上涨三浪：靠后一段与靠前一段 end 日期不同
-    early = [(5, 10, "L"), (12, 14, "H"), (18, 12, "L"), (25, 16, "H")]
-    late = [(45, 11, "L"), (52, 15, "H"), (58, 13, "L"), (65, 18, "H")]
-    df = _make_pivot_df(72, early + late)
-    r0 = waves.analyze_wave_speed(df, offset=0, window=2, min_pct=0.0)
-    r1 = waves.analyze_wave_speed(df, offset=1, window=2, min_pct=0.0)
+    # 连续 L-H-L-H-L-H：靠前段 end@75、靠后段 end@93；仅 2 个 up triple，offset=1 为靠前段
+    specs = [
+        (27, 14, "L"), (43, 15, "H"), (58, 18, "L"), (75, 19, "H"),
+        (81, 14, "L"), (93, 20, "H"),
+    ]
+    early_h_idx, late_h_idx = 75, 93
+    df = _make_pivot_df(96, specs)
+    kw = dict(window=2, min_pct=0.01)
+    triples = waves.find_wave_triples(df, **kw)
+    assert len(triples) == 2
+    assert triples[0].direction == "up"
+    assert triples[0].pivots[-1][0] == df.index[late_h_idx]
+    assert triples[1].direction == "up"
+    assert triples[1].pivots[-1][0] == df.index[early_h_idx]
+    r0 = waves.analyze_wave_speed(df, offset=0, **kw)
+    r1 = waves.analyze_wave_speed(df, offset=1, **kw)
     assert r0.current is not None and r1.current is not None
     assert r0.previous_available is True
+    assert r0.current.direction == "up"
+    assert r1.current.direction == "up"
+    assert r0.current.pivots[-1][0] == df.index[late_h_idx]
+    assert r1.current.pivots[-1][0] == df.index[early_h_idx]
     assert r0.current.pivots[-1][0] > r1.current.pivots[-1][0]
 
 
