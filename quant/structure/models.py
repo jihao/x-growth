@@ -55,3 +55,25 @@ class WaveTriple:
 class WaveSpeedResult:
     current: WaveTriple | None = None
     previous_available: bool = False
+
+
+@dataclass
+class DivergenceEvent:
+    side: str  # "top" | "bottom"
+    status: str  # "pending" | "confirmed"
+    p1_date: Any
+    p1_price: float
+    d1: float
+    d1_date: Any
+    p2_date: Any
+    p2_price: float
+    d2: float
+    d2_date: Any
+    confirm_date: Any | None = None
+    confirm_dif: float | None = None
+
+
+@dataclass
+class DivergenceResult:
+    events: list[DivergenceEvent] = field(default_factory=list)
+    overlay_events: list[DivergenceEvent] = field(default_factory=list)
