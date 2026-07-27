@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+import numpy as np
 import pandas as pd
 
 from quant.indicators import ta
@@ -10,6 +11,108 @@ from quant.structure.models import DivergenceEvent, DivergenceResult
 from quant.structure.waves import build_pivots
 
 EPS = 1e-8
+
+LEVEL_CN = {"strong": "强", "medium": "中", "weak": "弱"}
+
+
+def event_speed_span(df: pd.DataFrame, ev: DivergenceEvent) -> tuple[float, int]:
+    try:
+        i1 = int(df.index.get_loc(ev.p1_date))
+        i2 = int(df.index.get_loc(ev.p2_date))
+    except KeyError:
+        return 0.0, 0
+    bars = max(i2 - i1, 1)
+    speed = abs(float(ev.p2_price) - float(ev.p1_price)) / bars
+    return float(speed), int(bars)
+
+
+def assign_levels_for_side(
+    events: list[DivergenceEvent],
+    q_slow: float = 0.33,
+    q_fast: float = 0.66,
+) -> list[DivergenceEvent]:
+    if not events:
+        return []
+    if len(events) == 1:
+        return [replace(events[0], level="medium")]
+    if len(events) == 2:
+        a, b = events[0], events[1]
+        if a.speed <= b.speed:
+            return [replace(a, level="strong"), replace(b, level="weak")]
+        return [replace(a, level="weak"), replace(b, level="strong")]
+    speeds = np.array([e.speed for e in events], dtype=float)
+    p_slow = float(np.quantile(speeds, q_slow))
+    p_fast = float(np.quantile(speeds, q_fast))
+    out = []
+    for e in events:
+        if e.speed <= p_slow:
+            lv = "strong"
+        elif e.speed <= p_fast:
+            lv = "medium"
+        else:
+            lv = "weak"
+        out.append(replace(e, level=lv))
+    return out
+
+
+def _better_preferred(a: DivergenceEvent, b: DivergenceEvent, near_pct: float) -> DivergenceEvent:
+    denom = max(a.speed, b.speed, EPS)
+    rel = abs(a.speed - b.speed) / denom
+    if rel < near_pct:
+        if a.p2_date != b.p2_date:
+            return a if a.p2_date > b.p2_date else b
+        return a if a.span_bars >= b.span_bars else b
+    return a if a.speed <= b.speed else b
+
+
+def pick_preferred(
+    events: list[DivergenceEvent], near_pct: float = 0.05
+) -> DivergenceEvent | None:
+    if not events:
+        return None
+    best = events[0]
+    for e in events[1:]:
+        best = _better_preferred(best, e, near_pct)
+    return best
+
+
+def annotate_levels(
+    df: pd.DataFrame,
+    events: list[DivergenceEvent],
+    q_slow: float = 0.33,
+    q_fast: float = 0.66,
+    near_pct: float = 0.05,
+) -> tuple[list[DivergenceEvent], DivergenceEvent | None]:
+    if not events:
+        return [], None
+    filled: list[DivergenceEvent] = []
+    for ev in events:
+        speed, span = event_speed_span(df, ev)
+        filled.append(replace(ev, speed=speed, span_bars=span))
+
+    annotated: list[DivergenceEvent] = []
+    prefs: list[DivergenceEvent] = []
+    for side in ("top", "bottom"):
+        side_evs = [e for e in filled if e.side == side]
+        leveled = assign_levels_for_side(side_evs, q_slow=q_slow, q_fast=q_fast)
+        pref = pick_preferred(leveled, near_pct=near_pct)
+        for e in leveled:
+            is_pref = (
+                pref is not None
+                and e.side == pref.side
+                and e.p2_date == pref.p2_date
+                and e.p1_date == pref.p1_date
+            )
+            annotated.append(replace(e, preferred=is_pref))
+        if pref is not None:
+            marked = next(x for x in annotated if x.preferred and x.side == side)
+            prefs.append(marked)
+
+    annotated.sort(key=lambda e: e.p2_date)
+    if not prefs:
+        return annotated, None
+    preferred_event = max(prefs, key=lambda e: e.p2_date)
+    return annotated, preferred_event
 
 
 def align_dif_at_pivot(
@@ -120,6 +223,9 @@ def analyze_divergence(
     align_bars: int = 3,
     confirm_pct: float = 0.05,
     dif: pd.Series | None = None,
+    q_slow: float = 0.33,
+    q_fast: float = 0.66,
+    near_pct: float = 0.05,
 ) -> DivergenceResult:
     if dif is None:
         dif, _, _ = ta.macd(df["close"])
@@ -127,7 +233,11 @@ def analyze_divergence(
     events = detect_events(
         df, dif, pivots, align_bars=align_bars, confirm_pct=confirm_pct
     )
+    events, preferred = annotate_levels(
+        df, events, q_slow=q_slow, q_fast=q_fast, near_pct=near_pct
+    )
     return DivergenceResult(
         events=events,
         overlay_events=filter_overlay_events(events),
+        preferred_event=preferred,
     )
