@@ -176,3 +176,4 @@ Desktop.ini
 secrets/
 credentials.json
 .superpowers/
+.worktrees/
