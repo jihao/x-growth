@@ -1,7 +1,7 @@
 # 结构分析 · DIF 背离设计
 
 日期：2026-07-27  
-状态：已确认设计，待写实现计划  
+状态：已确认设计；实现计划见 `docs/superpowers/plans/2026-07-27-divergence.md`  
 范围：结构分析第三期——日线 DIF 顶/底背离（钝化 + 确认）；复用 swings 与 `ta.macd`；本地 Streamlit
 
 ## 背景
