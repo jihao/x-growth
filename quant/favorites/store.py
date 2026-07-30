@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS favorites (
   PRIMARY KEY (ts_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 """
+_ensured = False
 
 
 def _conn():
@@ -21,11 +22,16 @@ def _conn():
 
 
 def ensure_table() -> None:
+    global _ensured
+    if _ensured:
+        return
+
     conn = _conn()
     try:
         with conn.cursor() as cur:
             cur.execute(_CREATE_SQL)
         conn.commit()
+        _ensured = True
     finally:
         conn.close()
 

@@ -77,9 +77,6 @@ with st.sidebar:
             st.session_state.home_stock = code_to_label.get(
                 st.session_state.ts_code, options[0]
             )
-        want = code_to_label.get(st.session_state.ts_code)
-        if want and st.session_state.home_stock != want:
-            st.session_state.home_stock = want
         picked = st.selectbox("股票", options, key="home_stock")
         ts_code = picked.split("  ")[0]
         st.session_state.ts_code = ts_code

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pandas as pd
-import pytest
 
 from quant.favorites import store
 
@@ -50,10 +49,12 @@ class _FakeConn:
 def test_ensure_table_runs_create():
     cur = _FakeCursor()
     conn = _FakeConn(cur)
-    with patch.object(store, "_conn", return_value=conn):
+    with patch.object(store, "_conn", return_value=conn) as connect:
+        store.ensure_table()
         store.ensure_table()
     assert any("CREATE TABLE" in sql.upper() and "favorites" in sql.lower()
                for sql, _ in cur.executed)
+    assert connect.call_count == 1
     assert conn.committed and conn.closed
 
 
