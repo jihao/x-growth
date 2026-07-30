@@ -374,7 +374,7 @@ with tab1:
                 )
                 for i, leg in enumerate(t.legs, 1):
                     wave_rows.append({
-                        "浪": i,
+                        "浪": str(i),  # str：避免与「结论」混类型导致 Arrow 序列化失败
                         "起点": str(leg.start_date)[:10],
                         "终点": str(leg.end_date)[:10],
                         "根数": leg.bars,
@@ -383,7 +383,7 @@ with tab1:
                     })
                 wave_rows.append({
                     "浪": "结论",
-                    "起点": "", "终点": "", "根数": "",
+                    "起点": "", "终点": "", "根数": None,
                     "速度": round(t.ratio, 4),
                     "涨跌幅": verdict_cn,
                 })
