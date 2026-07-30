@@ -13,6 +13,7 @@ from quant.data import loader
 from quant.concentration import cache
 from quant.backtest import engine, metrics, strategies
 from quant.charts import plots
+from quant.favorites import store as fav_store
 
 st.set_page_config(page_title="量化分析系统", layout="wide")
 
@@ -38,21 +39,103 @@ def _safe_daily(ts_code, start, end):
 st.title("量化交易分析系统")
 
 with st.sidebar:
+    st.header("导航")
+    nav = st.radio(
+        "页面",
+        ["首页", "收藏"],
+        key="nav",
+        label_visibility="collapsed",
+    )
+
     st.header("参数")
     try:
         stocks = _stocks()
         options = (stocks["ts_code"] + "  " + stocks["name"].fillna("")).tolist()
+        code_to_label = {
+            label.split("  ")[0]: label for label in options
+        }
     except Exception as exc:  # 连库失败友好提示
         st.error(f"无法连接 MySQL，请检查 database/mysql/mysql.env：{exc}")
         st.stop()
     if stocks.empty or not options:
         st.error("股票列表为空，请检查数据库。")
         st.stop()
-    picked = st.selectbox("股票", options)
-    ts_code = picked.split("  ")[0]
+
+    if "ts_code" not in st.session_state:
+        st.session_state.ts_code = options[0].split("  ")[0]
+
     _default_start = pd.Timestamp.today() - pd.DateOffset(months=6)
-    start = st.date_input("开始", _default_start).strftime("%Y%m%d")
-    end = st.date_input("结束", pd.Timestamp.today()).strftime("%Y%m%d")
+    start = st.date_input(
+        "开始", _default_start, key="date_start"
+    ).strftime("%Y%m%d")
+    end = st.date_input(
+        "结束", pd.Timestamp.today(), key="date_end"
+    ).strftime("%Y%m%d")
+
+    if nav == "首页":
+        if "home_stock" not in st.session_state:
+            st.session_state.home_stock = code_to_label.get(
+                st.session_state.ts_code, options[0]
+            )
+        want = code_to_label.get(st.session_state.ts_code)
+        if want and st.session_state.home_stock != want:
+            st.session_state.home_stock = want
+        picked = st.selectbox("股票", options, key="home_stock")
+        ts_code = picked.split("  ")[0]
+        st.session_state.ts_code = ts_code
+
+        try:
+            fav_store.ensure_table()
+            starred = fav_store.is_favorite(ts_code)
+        except Exception as exc:
+            st.error(f"读取收藏失败：{exc}")
+            starred = False
+        star_label = "★ 取消收藏" if starred else "☆ 收藏"
+        if st.button(star_label, key="toggle_fav_home"):
+            try:
+                if starred:
+                    fav_store.remove(ts_code)
+                else:
+                    fav_store.add(ts_code)
+                st.rerun()
+            except Exception as exc:
+                st.error(f"更新收藏失败：{exc}")
+    else:
+        try:
+            fav_store.ensure_table()
+            fav_df = fav_store.list_favorites()
+        except Exception as exc:
+            st.error(f"读取收藏列表失败：{exc}")
+            fav_df = pd.DataFrame(columns=["ts_code", "name", "created_at"])
+
+        if fav_df.empty:
+            st.info("暂无收藏")
+            ts_code = st.session_state.ts_code
+        else:
+            for _, row in fav_df.iterrows():
+                code = row["ts_code"]
+                name = row["name"] if pd.notna(row["name"]) and row["name"] else ""
+                label = f"{code}  {name}".rstrip()
+                c1, c2 = st.columns([4, 1])
+                with c1:
+                    if st.button(
+                        label,
+                        key=f"fav_pick_{code}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.ts_code = code
+                        if code in code_to_label:
+                            st.session_state.home_stock = code_to_label[code]
+                        st.rerun()
+                with c2:
+                    if st.button("✕", key=f"fav_del_{code}", help="取消收藏"):
+                        try:
+                            fav_store.remove(code)
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"取消收藏失败：{exc}")
+            ts_code = st.session_state.ts_code
+            st.caption(f"当前：{code_to_label.get(ts_code, ts_code)}")
 
 tab1, tab2, tab3 = st.tabs(["行情分析", "资金集中度", "策略回测"])
 
