@@ -1,14 +1,15 @@
 # database/ 定时任务脚本依赖（独立于 backend）
 # 安装: python -m venv .venv && .venv/bin/pip install -r requirements.txt
-baostock>=0.9.1
-pymysql>=1.1.0
-yfinance
-akshare
-pandas
-numpy
-matplotlib
+# 版本对齐本地 .venv（pip freeze，2026-07-31）
+baostock==0.9.3
+pymysql==1.2.0
+yfinance==1.5.1
+akshare==1.18.75
+pandas==3.0.5
+numpy==2.5.1
+matplotlib==3.11.1
 
 # quant/ 分析系统依赖（pymysql 已在上方声明，复用）
-plotly>=5.20
-streamlit>=1.33
-pytest>=8.0
+plotly==6.9.0
+streamlit==1.60.0
+pytest==9.1.1
