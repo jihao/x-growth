@@ -37,12 +37,19 @@ def mysql_settings() -> dict[str, Any]:
         raise ValueError("MYSQL_USER is required (env or database/mysql.env)")
     password = os.environ.get("MYSQL_PASSWORD", "")
     database = os.environ.get("MYSQL_DATABASE", "astocks_qfq")
+    # 本地默认 5s：连不上尽快失败；远程可在 mysql.env 调大 MYSQL_CONNECT_TIMEOUT
+    connect_timeout = int(os.environ.get("MYSQL_CONNECT_TIMEOUT", "5"))
+    read_timeout = int(os.environ.get("MYSQL_READ_TIMEOUT", "60"))
+    write_timeout = int(os.environ.get("MYSQL_WRITE_TIMEOUT", "60"))
     return {
         "host": host,
         "port": port,
         "user": user,
         "password": password,
         "database": database,
+        "connect_timeout": connect_timeout,
+        "read_timeout": read_timeout,
+        "write_timeout": write_timeout,
     }
 
 
@@ -57,6 +64,9 @@ def connect_mysql(**overrides: Any) -> pymysql.connections.Connection:
         charset="utf8mb4",
         autocommit=False,
         cursorclass=pymysql.cursors.Cursor,
+        connect_timeout=int(settings["connect_timeout"]),
+        read_timeout=int(settings["read_timeout"]),
+        write_timeout=int(settings["write_timeout"]),
     )
     db = settings.get("database")
     if db is not None:

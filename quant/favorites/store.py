@@ -21,25 +21,31 @@ def _conn():
     return connect_mysql()
 
 
-def ensure_table() -> None:
+def _ensure_on(conn) -> None:
+    """在已有连接上建表；进程内只执行一次 CREATE。"""
     global _ensured
     if _ensured:
         return
+    with conn.cursor() as cur:
+        cur.execute(_CREATE_SQL)
+    conn.commit()
+    _ensured = True
 
+
+def ensure_table() -> None:
+    if _ensured:
+        return
     conn = _conn()
     try:
-        with conn.cursor() as cur:
-            cur.execute(_CREATE_SQL)
-        conn.commit()
-        _ensured = True
+        _ensure_on(conn)
     finally:
         conn.close()
 
 
 def add(ts_code: str) -> None:
-    ensure_table()
     conn = _conn()
     try:
+        _ensure_on(conn)
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT IGNORE INTO favorites (ts_code) VALUES (%s)",
@@ -51,9 +57,9 @@ def add(ts_code: str) -> None:
 
 
 def remove(ts_code: str) -> None:
-    ensure_table()
     conn = _conn()
     try:
+        _ensure_on(conn)
         with conn.cursor() as cur:
             cur.execute("DELETE FROM favorites WHERE ts_code=%s", (ts_code,))
         conn.commit()
@@ -62,9 +68,9 @@ def remove(ts_code: str) -> None:
 
 
 def is_favorite(ts_code: str) -> bool:
-    ensure_table()
     conn = _conn()
     try:
+        _ensure_on(conn)
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT 1 FROM favorites WHERE ts_code=%s LIMIT 1",
@@ -76,9 +82,9 @@ def is_favorite(ts_code: str) -> bool:
 
 
 def list_favorites() -> pd.DataFrame:
-    ensure_table()
     conn = _conn()
     try:
+        _ensure_on(conn)
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT f.ts_code, s.name, f.created_at "

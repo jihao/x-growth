@@ -3,8 +3,16 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pandas as pd
+import pytest
 
 from quant.favorites import store
+
+
+@pytest.fixture(autouse=True)
+def _reset_ensured():
+    store._ensured = False
+    yield
+    store._ensured = False
 
 
 class _FakeCursor:

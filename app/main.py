@@ -82,7 +82,7 @@ with st.sidebar:
         st.session_state.ts_code = ts_code
 
         try:
-            fav_store.ensure_table()
+            # is_favorite 内部同连接 ensure_table，避免打开页多建一条连接
             starred = fav_store.is_favorite(ts_code)
         except Exception as exc:
             st.error(f"读取收藏失败：{exc}")
@@ -99,7 +99,6 @@ with st.sidebar:
                 st.error(f"更新收藏失败：{exc}")
     else:
         try:
-            fav_store.ensure_table()
             fav_df = fav_store.list_favorites()
         except Exception as exc:
             st.error(f"读取收藏列表失败：{exc}")

@@ -14,6 +14,23 @@ def test_mysql_settings_defaults(monkeypatch):
     assert s["user"] == "u1"
     assert s["password"] == ""
     assert s["database"] == "astocks_qfq"
+    assert s["connect_timeout"] == 5
+    assert s["read_timeout"] == 60
+    assert s["write_timeout"] == 60
+
+
+def test_mysql_settings_timeout_env(monkeypatch):
+    for key in list(os.environ):
+        if key.startswith("MYSQL_"):
+            monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("MYSQL_USER", "u1")
+    monkeypatch.setenv("MYSQL_CONNECT_TIMEOUT", "3")
+    monkeypatch.setenv("MYSQL_READ_TIMEOUT", "120")
+    monkeypatch.setenv("MYSQL_WRITE_TIMEOUT", "90")
+    s = mysql_config.mysql_settings()
+    assert s["connect_timeout"] == 3
+    assert s["read_timeout"] == 120
+    assert s["write_timeout"] == 90
 
 
 def test_mysql_settings_requires_user(monkeypatch):
