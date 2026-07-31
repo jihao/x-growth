@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from quant.calendar.cn_holidays import load_holidays
 from quant.indicators import ta
 
 _BOARD_LABELS = {
@@ -26,7 +27,7 @@ def kline_chart(df, overlays=("ma5", "ma20", "boll"), sub=("macd", "rsi"), drawa
             close=df["close"], name="K线",
             increasing=dict(line=dict(color="#ef5350"), fillcolor="#ef5350"),
             decreasing=dict(line=dict(color="#26a69a"), fillcolor="#26a69a"),
-            # text + hoverinfo 比单独 hovertemplate 在 Candlestick 上更稳
+            # Candlestick 在部分 plotly 版本不支持 hovertemplate，用 text + hoverinfo
             text=[
                 (
                     f"{idx.strftime('%Y-%m-%d')}<br>"
@@ -40,7 +41,6 @@ def kline_chart(df, overlays=("ma5", "ma20", "boll"), sub=("macd", "rsi"), drawa
                 )
             ],
             hoverinfo="text",
-            hovertemplate="%{text}<extra></extra>",
         ),
         row=1, col=1,
     )
@@ -108,6 +108,13 @@ def kline_chart(df, overlays=("ma5", "ma20", "boll"), sub=("macd", "rsi"), drawa
             ]
         ),
         row=1, col=1,
+    )
+    # 隐藏周六/周日 + 法定放假日，避免 K 线自然日空白
+    fig.update_xaxes(
+        rangebreaks=[
+            dict(bounds=["sat", "mon"]),  # 周六、周日
+            dict(values=list(load_holidays())),
+        ]
     )
     return fig
 
