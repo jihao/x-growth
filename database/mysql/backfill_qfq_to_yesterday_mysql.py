@@ -12,10 +12,13 @@
     python backfill_qfq_to_yesterday_mysql.py
     python backfill_qfq_to_yesterday_mysql.py --end-date 2026-06-09
     python backfill_qfq_to_yesterday_mysql.py --dry-run
+    # 强制重拉并覆盖指定区间（已有错误数据时用）：
+    python backfill_qfq_to_yesterday_mysql.py --start-date 20260728 --end-date 20260729 --force
 
 连接配置见 mysql_config.py / mysql.env（MYSQL_* 环境变量）。
 说明：
     baostock adjustflag="2" 为官方前复权口径。
+    默认只补「库中缺失」的交易日；加 --force 会对区间内所有交易日重新下载并用 UPSERT 覆盖。
 """
 
 from __future__ import annotations
@@ -217,12 +220,21 @@ def parse_args():
     parser.add_argument("--commit-every", type=int, default=100, help="每处理多少只股票提交一次事务")
     parser.add_argument("--limit", type=int, default=None, help="只处理前 N 只股票，调试用")
     parser.add_argument("--dry-run", action="store_true", help="只打印缺失情况，不下载写入")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="强制重拉 --start-date~--end-date 内交易日并 UPSERT 覆盖已有行（不只补缺失）",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
     end_date = compact_date(args.end_date)
+
+    if args.force and not args.start_date:
+        print("错误: --force 必须同时指定 --start-date（避免误扫过大区间）")
+        return 1
 
     mysql_config.load_dotenv()
     try:
@@ -238,6 +250,8 @@ def main():
         f"MySQL: {settings['user']}@{settings['host']}:{settings['port']}/{settings['database']}"
     )
     print(f"截止日期: {end_date} ({dashed_date(end_date)})")
+    if args.force:
+        print("模式: FORCE（重拉区间内全部交易日并覆盖）")
     print()
 
     try:
@@ -264,6 +278,7 @@ def main():
 
     if start_date > end_date:
         print("数据库最大交易日已经晚于或等于截止日期，无需补齐。")
+        print("若要强制覆盖已有日期，请加: --start-date YYYYMMDD --end-date YYYYMMDD --force")
         cursor.close()
         conn.close()
         return 0
@@ -277,8 +292,9 @@ def main():
             print("扫描区间内没有交易日，无需补齐。")
             return 0
 
-        print(f"缺失交易日数量: {len(trading_dates)}")
-        print("缺失交易日:")
+        label = "强制重拉交易日" if args.force else "缺失交易日"
+        print(f"{label}数量: {len(trading_dates)}")
+        print(f"{label}:")
         print("  " + ", ".join(trading_dates))
         print()
 
@@ -289,7 +305,7 @@ def main():
 
         print(f"待检查股票数: {len(stocks)}")
         if args.dry_run:
-            print("dry-run 模式：只检查全市场缺失交易日，不下载写入。")
+            print("dry-run 模式：只检查交易日，不下载写入。")
             return 0
 
         trading_set = set(trading_dates)
@@ -306,23 +322,27 @@ def main():
             if args.relogin_interval and checked > 1 and (checked - 1) % args.relogin_interval == 0:
                 relogin()
 
-            cursor.execute(
-                """
-                SELECT trade_date
-                FROM daily_qfq
-                WHERE ts_code = %s
-                  AND trade_date BETWEEN %s AND %s
-                """,
-                (ts_code, trading_dates[0], trading_dates[-1]),
-            )
-            existing = {item[0] for item in cursor.fetchall()}
-            missing = trading_set - existing
+            if args.force:
+                # 强制：区间内交易日全部重拉（UPSERT 覆盖）
+                to_fetch = trading_set
+            else:
+                cursor.execute(
+                    """
+                    SELECT trade_date
+                    FROM daily_qfq
+                    WHERE ts_code = %s
+                      AND trade_date BETWEEN %s AND %s
+                    """,
+                    (ts_code, trading_dates[0], trading_dates[-1]),
+                )
+                existing = {item[0] for item in cursor.fetchall()}
+                to_fetch = trading_set - existing
 
-            if not missing:
+            if not to_fetch:
                 skipped += 1
             else:
                 bs_code = ts_code_to_bs_code(ts_code)
-                ranges = group_by_calendar_ranges(missing, trading_dates)
+                ranges = group_by_calendar_ranges(to_fetch, trading_dates)
                 for range_start, range_end in ranges:
                     try:
                         rows = download_range(bs_code, range_start, range_end, args.retries)
