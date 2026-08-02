@@ -169,19 +169,99 @@ def quote_header_html(
 """
 
 
+def _fmt_date(idx) -> str:
+    return idx.strftime("%y-%m-%d")
+
+
+def _add_indicator(fig: go.Figure, df: pd.DataFrame, indicator: str, row: int, theme: dict[str, str]) -> None:
+    """在副图绘制单一技术指标。"""
+    name = (indicator or "").lower()
+    if name == "macd":
+        dif, dea, hist = ta.macd(df["close"])
+        fig.add_trace(go.Scatter(
+            x=df.index, y=dif, name="DIF",
+            line=dict(width=1.2, color=theme["dif"]),
+            hovertemplate="DIF: %{y:.4f}<extra></extra>",
+        ), row=row, col=1)
+        fig.add_trace(go.Scatter(
+            x=df.index, y=dea, name="DEA",
+            line=dict(width=1.2, color=theme["dea"]),
+            hovertemplate="DEA: %{y:.4f}<extra></extra>",
+        ), row=row, col=1)
+        fig.add_trace(go.Bar(
+            x=df.index, y=hist, name="MACD",
+            marker_color=_hist_colors(hist, theme),
+            hovertemplate="MACD: %{y:.4f}<extra></extra>",
+        ), row=row, col=1)
+    elif name == "kdj":
+        k, d, j = ta.kdj(df["high"], df["low"], df["close"])
+        fig.add_trace(go.Scatter(
+            x=df.index, y=k, name="K",
+            line=dict(width=1.2, color=theme["dif"]),
+            hovertemplate="K: %{y:.2f}<extra></extra>",
+        ), row=row, col=1)
+        fig.add_trace(go.Scatter(
+            x=df.index, y=d, name="D",
+            line=dict(width=1.2, color=theme["dea"]),
+            hovertemplate="D: %{y:.2f}<extra></extra>",
+        ), row=row, col=1)
+        fig.add_trace(go.Scatter(
+            x=df.index, y=j, name="J",
+            line=dict(width=1.2, color="#AB47BC"),
+            hovertemplate="J: %{y:.2f}<extra></extra>",
+        ), row=row, col=1)
+    elif name == "rsi":
+        rsi_vals = ta.rsi(df["close"])
+        fig.add_trace(go.Scatter(
+            x=df.index, y=rsi_vals, name="RSI",
+            line=dict(width=1.2, color="#AB47BC"),
+            hovertemplate="RSI: %{y:.2f}<extra></extra>",
+        ), row=row, col=1)
+        fig.add_hline(
+            y=70, line=dict(color="rgba(239,83,80,0.4)", width=1, dash="dot"),
+            row=row, col=1,
+        )
+        fig.add_hline(
+            y=30, line=dict(color="rgba(38,166,154,0.4)", width=1, dash="dot"),
+            row=row, col=1,
+        )
+    elif name == "boll":
+        up, mid, low = ta.boll(df["close"])
+        for y, nm, c in [
+            (up, "BOLL上", "#78909C"),
+            (mid, "BOLL中", "#90A4AE"),
+            (low, "BOLL下", "#78909C"),
+        ]:
+            fig.add_trace(go.Scatter(
+                x=df.index, y=y, name=nm,
+                line=dict(width=1.2, color=c),
+                hovertemplate=f"{nm}: %{{y:.2f}}<extra></extra>",
+            ), row=row, col=1)
+
+
 def kline_chart(
     df,
-    overlays=("ma5", "ma20", "boll"),
-    sub=("macd", "rsi"),
+    overlays=("ma5", "ma10", "ma20", "ma60"),
+    indicator: str | None = "macd",
     drawable=True,
     theme_type: str = "dark",
+    *,
+    sub=None,
 ):
+    """K 线主图 + 成交量 + 单一技术指标副图。
+
+    ``indicator``: macd / kdj / rsi / boll / None。
+    ``sub`` 仅兼容旧调用：取首个元素作为 indicator；空元组表示无副图。
+    """
+    if sub is not None:
+        indicator = sub[0] if sub else None
     theme = chart_theme(theme_type)
     ma_colors = _MA_COLORS.get(theme_type, _MA_COLORS["dark"])
-    rows = 1 + 1 + len(sub)  # 主图 + 量 + 各副图
-    heights = [0.52, 0.14] + [0.34 / max(len(sub), 1)] * len(sub)
+    has_ind = bool(indicator)
+    rows = 2 + (1 if has_ind else 0)
+    heights = [0.58, 0.14, 0.28] if has_ind else [0.78, 0.22]
     fig = make_subplots(
-        rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.015,
+        rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.02,
         row_heights=heights,
     )
     fig.add_trace(
@@ -192,7 +272,7 @@ def kline_chart(
             decreasing=dict(line=dict(color=theme["down"], width=1), fillcolor=theme["down"]),
             text=[
                 (
-                    f"{idx.strftime('%Y-%m-%d')}<br>"
+                    f"{_fmt_date(idx)}<br>"
                     f"开盘: {o:.2f}<br>"
                     f"最高: {h:.2f}<br>"
                     f"最低: {lo:.2f}<br>"
@@ -217,6 +297,7 @@ def kline_chart(
                 hovertemplate=f"MA{n}: %{{y:.2f}}<extra></extra>",
             ), row=1, col=1)
         elif ov == "boll":
+            # 主图仍可叠加 BOLL；副图选 BOLL 时另画一套
             up, mid, low = ta.boll(df["close"])
             for y, nm, c in [
                 (up, "BOLL上", "#78909C"),
@@ -228,47 +309,31 @@ def kline_chart(
                     line=dict(width=1, dash="dot", color=c),
                     hovertemplate=f"{nm}: %{{y:.2f}}<extra></extra>",
                 ), row=1, col=1)
+
+    amount = df["amount"] if "amount" in df.columns else None
+    vol_hover = []
+    for i, (idx, vol) in enumerate(zip(df.index, df["volume"])):
+        line = f"{_fmt_date(idx)}<br>成交量: {vol:,.0f}"
+        if amount is not None and pd.notna(amount.iloc[i]):
+            amt = float(amount.iloc[i])
+            amt_s = f"{amt / 1e8:.2f}亿" if amt >= 1e8 else f"{amt / 1e4:.0f}万"
+            line += f"<br>成交额: {amt_s}"
+        vol_hover.append(line)
     fig.add_trace(
         go.Bar(
             x=df.index, y=df["volume"], name="成交量",
             marker_color=_vol_colors(df, theme),
-            hovertemplate="%{x|%Y-%m-%d}<br>成交量: %{y:,.0f}<extra></extra>",
+            text=vol_hover,
+            hoverinfo="text",
         ),
         row=2, col=1,
     )
 
-    r = 3
-    for name in sub:
-        if name == "macd":
-            dif, dea, hist = ta.macd(df["close"])
-            fig.add_trace(go.Scatter(
-                x=df.index, y=dif, name="DIF",
-                line=dict(width=1.2, color=theme["dif"]),
-                hovertemplate="DIF: %{y:.4f}<extra></extra>",
-            ), row=r, col=1)
-            fig.add_trace(go.Scatter(
-                x=df.index, y=dea, name="DEA",
-                line=dict(width=1.2, color=theme["dea"]),
-                hovertemplate="DEA: %{y:.4f}<extra></extra>",
-            ), row=r, col=1)
-            fig.add_trace(go.Bar(
-                x=df.index, y=hist, name="MACD",
-                marker_color=_hist_colors(hist, theme),
-                hovertemplate="MACD: %{y:.4f}<extra></extra>",
-            ), row=r, col=1)
-        elif name == "rsi":
-            rsi_vals = ta.rsi(df["close"])
-            fig.add_trace(go.Scatter(
-                x=df.index, y=rsi_vals, name="RSI",
-                line=dict(width=1.2, color="#AB47BC"),
-                hovertemplate="RSI: %{y:.2f}<extra></extra>",
-            ), row=r, col=1)
-            fig.add_hline(y=70, line=dict(color="rgba(239,83,80,0.4)", width=1, dash="dot"), row=r, col=1)
-            fig.add_hline(y=30, line=dict(color="rgba(38,166,154,0.4)", width=1, dash="dot"), row=r, col=1)
-        r += 1
+    if has_ind:
+        _add_indicator(fig, df, str(indicator), row=3, theme=theme)
 
     fig.update_layout(
-        height=820,
+        height=820 if has_ind else 700,
         dragmode="zoom",
         hovermode="x unified",
         paper_bgcolor=theme["bg"],
@@ -276,17 +341,16 @@ def kline_chart(
         font=dict(color=theme["text"], size=11),
         newshape=dict(line_color="#FF9800"),
         modebar_add=["drawline", "drawopenpath", "eraseshape"] if drawable else [],
-        # 图例放整图下方，避免与顶部区间按钮 / modebar 重叠
         legend=dict(
             orientation="h",
             yanchor="top",
-            y=-0.10,
+            y=-0.08,
             xanchor="left",
             x=0,
             bgcolor=theme["legend_bg"],
             font=dict(color=theme["text"], size=10),
         ),
-        margin=dict(l=8, r=56, t=48, b=88),
+        margin=dict(l=8, r=56, t=48, b=72),
         hoverlabel=dict(
             bgcolor=theme["hover_bg"],
             bordercolor=theme["hover_border"],
@@ -295,14 +359,15 @@ def kline_chart(
     )
     _apply_kline_theme(fig, rows, theme)
 
-    fig.update_xaxes(rangeslider_visible=False)
-    fig.update_xaxes(
-        rangeslider_visible=True,
-        rangeslider_thickness=0.04,
-        rangeslider=dict(bgcolor=theme["slider_bg"], bordercolor=theme["slider_border"]),
-        row=rows, col=1,
-    )
-    # 区间按钮靠左上，与右上角 modebar 错开
+    # 日期轴：成交量与副图之间显示 yy-MM-dd（参考排版）
+    fig.update_xaxes(rangeslider_visible=False, tickformat="%y-%m-%d")
+    if has_ind:
+        fig.update_xaxes(showticklabels=True, row=2, col=1)
+        fig.update_xaxes(showticklabels=False, row=3, col=1)
+    else:
+        fig.update_xaxes(showticklabels=True, row=2, col=1)
+    fig.update_xaxes(showticklabels=False, row=1, col=1)
+
     fig.update_xaxes(
         rangeselector=dict(
             buttons=_RANGE_BUTTONS,

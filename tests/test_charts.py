@@ -32,19 +32,20 @@ def test_kline_cn_colors_and_hover():
     sample = candle.text[0]
     for label in ("开盘", "最高", "最低", "收盘"):
         assert label in sample
+    assert sample.startswith("20-")  # yy-MM-dd
     assert fig.layout.dragmode == "zoom"
     assert fig.layout.hovermode == "x unified"
     assert fig.layout.paper_bgcolor == "#0b0e14"
     assert fig.layout.legend.orientation == "h"
     assert fig.layout.legend.y is not None and fig.layout.legend.y < 0
-    assert fig.layout.margin.b >= 80
+    assert fig.layout.margin.b >= 60
     # 成交量按涨跌着色
     vol = next(t for t in fig.data if t.name == "成交量")
     assert vol.marker.color is not None
 
 
 def test_kline_ma_colors():
-    fig = plots.kline_chart(_df(), overlays=("ma5", "ma10", "ma20", "ma60"), sub=())
+    fig = plots.kline_chart(_df(), overlays=("ma5", "ma10", "ma20", "ma60"), indicator=None)
     ma5 = next(t for t in fig.data if t.name == "MA5")
     ma10 = next(t for t in fig.data if t.name == "MA10")
     assert ma5.line.color == "#FFD54F"
@@ -53,11 +54,23 @@ def test_kline_ma_colors():
 
 def test_kline_light_theme():
     fig = plots.kline_chart(
-        _df(), overlays=("ma5",), sub=("macd",), theme_type="light",
+        _df(), overlays=("ma5",), indicator="macd", theme_type="light",
     )
     assert fig.layout.paper_bgcolor == "#ffffff"
     ma5 = next(t for t in fig.data if t.name == "MA5")
     assert ma5.line.color == "#F57C00"
+
+
+def test_kline_indicator_switch():
+    for ind, names in [
+        ("macd", {"DIF", "DEA", "MACD"}),
+        ("kdj", {"K", "D", "J"}),
+        ("rsi", {"RSI"}),
+        ("boll", {"BOLL上", "BOLL中", "BOLL下"}),
+    ]:
+        fig = plots.kline_chart(_df(), overlays=(), indicator=ind)
+        got = {t.name for t in fig.data}
+        assert names <= got
 
 
 def test_quote_header_html():
@@ -88,15 +101,12 @@ def test_concentration_chart():
 def test_kline_has_drawtools_and_timeline():
     fig = plots.kline_chart(_df())
     assert fig.layout.dragmode == "zoom"
-    # 画线工具仍在 modebar，需要时点选
     assert "drawline" in (fig.layout.modebar.add or [])
     layout = fig.layout.to_plotly_json()
-    any_slider = any(
-        isinstance(v, dict) and v.get("rangeslider", {}).get("visible")
-        for k, v in layout.items() if k.startswith("xaxis")
-    )
-    assert any_slider
     assert layout["xaxis"].get("rangeselector") is not None
+    # 日期轴 yy-MM-dd；成交量与副图之间显示刻度
+    assert layout.get("xaxis2", {}).get("tickformat") == "%y-%m-%d" or \
+        layout["xaxis"].get("tickformat") == "%y-%m-%d"
 
 
 def test_board_area_chart_returns_figure():

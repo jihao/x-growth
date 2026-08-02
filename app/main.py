@@ -160,11 +160,8 @@ with tab1:
                     st.rerun()
                 st.markdown("**图设置**")
                 overlays = st.multiselect(
-                    "叠加", ["ma5", "ma10", "ma20", "ma60", "boll"],
+                    "叠加", ["ma5", "ma10", "ma20", "ma60"],
                     default=["ma5", "ma10", "ma20", "ma60"], key="tab1_overlays",
-                )
-                sub = st.multiselect(
-                    "副图", ["macd", "rsi"], default=["macd"], key="tab1_sub",
                 )
                 period = st.selectbox(
                     "周期", ["日线", "周线（即将支持）"], key="tab1_period",
@@ -178,7 +175,6 @@ with tab1:
                 overlays = st.session_state.get(
                     "tab1_overlays", ["ma5", "ma10", "ma20", "ma60"]
                 )
-                sub = st.session_state.get("tab1_sub", ["macd"])
                 period = st.session_state.get("tab1_period", "日线")
 
         with col_right:
@@ -301,7 +297,17 @@ with tab1:
         d_align = int(st.session_state.get("tab1_d_align", 3))
         d_confirm = float(st.session_state.get("tab1_d_confirm", 0.05))
 
-        fig = plots.kline_chart(df, tuple(overlays), tuple(sub), theme_type=UI_THEME)
+        if "tab1_indicator" not in st.session_state:
+            st.session_state.tab1_indicator = "MACD"
+        _ind_label = st.session_state.tab1_indicator
+        if _ind_label not in ("MACD", "KDJ", "RSI", "BOLL"):
+            _ind_label = "MACD"
+            st.session_state.tab1_indicator = _ind_label
+        indicator = _ind_label.lower()
+
+        fig = plots.kline_chart(
+            df, tuple(overlays), indicator=indicator, theme_type=UI_THEME,
+        )
         detail_rows = []
         wave_rows = []
         div_rows = []
@@ -446,7 +452,15 @@ with tab1:
                 plots.quote_header_html(df, ts_code, stock_name, theme_type=UI_THEME),
                 unsafe_allow_html=True,
             )
-            st.plotly_chart(fig, width="stretch", key=f"kline_{UI_THEME}")
+            st.plotly_chart(
+                fig, width="stretch", key=f"kline_{UI_THEME}_{indicator}",
+            )
+            st.pills(
+                "技术指标",
+                ["MACD", "KDJ", "RSI", "BOLL"],
+                key="tab1_indicator",
+                label_visibility="collapsed",
+            )
             for w in mid_warnings:
                 st.warning(w)
             for info in mid_infos:
