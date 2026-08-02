@@ -203,9 +203,24 @@ def explain_row(row: dict) -> dict:
 
     idx = _base_action(total)
     idx = min(idx + len(hard_risks), len(ACTIONS) - 1)
+
+    # 市场环境封顶：row["regime"] 传入 market_regime 结果时，
+    # 偏弱封「轻仓试探」、弱势封「观望」（只降档，永不升档）
+    regime = row.get("regime") or {}
+    cap = int(regime.get("cap_index", 0) or 0)
+    regime_note = None
+    if cap > idx:
+        regime_note = (
+            f"市场环境{regime.get('level', '')}"
+            f"（得分 {regime.get('score', 0):+.2f}），"
+            f"档位由「{ACTIONS[idx]}」下调为「{ACTIONS[cap]}」"
+        )
+        idx = cap
     action = ACTIONS[idx]
 
     reasons = []
+    if regime_note:
+        reasons.append(regime_note)
     if boosts:
         reasons.append("支撑因素：" + "；".join(boosts))
     if risks:

@@ -161,8 +161,66 @@ tests/
 - `test_screening_weights.py`：夏普归一化、负值截断、全负等权退化、`ml_boost` 钩子
 - `test_screening_pipeline.py`：mock loader 端到端（ST/停牌过滤、top_n/top_k、排序、回调）
 - `test_screening_store.py`：建表、删后插幂等、读回排序（fake 连接，对齐 favorites 测法）
+- `test_screening_tracking.py`：跟踪复盘口径（T+1 开盘入场、快照收益、再入选/连选/落榜、建议翻转、停牌顺延、窗口未满 pending、批量复盘聚合、跨日汇总、秩相关）
+- `test_app_tracking_ui.py`：「跟踪复盘」页导航、侧栏参数隐藏、双视角渲染
+
+## 跟踪复盘（tracking.py + 导航「跟踪复盘」页）
+
+**口径**：信号 T 日收盘后产生，入场基准 = **T+1 开盘价**（前复权，与收盘同口径）；
+T+n 收益 = 第 n 个后续交易日收盘 / T+1 开盘 - 1；快照点 n ∈ {5, 10, 20, 30}；
+行情库最新日之前的窗口为「复盘进行中」，按可用天数计算并标注进度。
+
+**个股跟踪** `track_pick(trade_date, ts_code)` → `{"daily", "summary"}`：
+- 逐日：收盘/累计收益/是否在榜/名次/总分/当日建议（由当日落库因子经 explain 规则引擎重算）
+- 汇总：T+5/10/20/30 与至今收益、最大浮盈/浮亏（日内极值口径）、再入选天数、
+  最长连选、名次首/佳/末、落榜日、建议翻转序列（如 `观望→减仓/回避（08-01）`）
+- 异动事件：放量（量比 ≥ 2）、涨跌停（主板 9.8% / 创业科创 19.8% / 北交所 29.8%）、
+  收盘跌破入选日低点、T+1 一字板买入困难
+- 验证结论 `_verdict`：五档色调 good/ok/neutral/bad/pending，
+  正面建议看 T+min(20,窗口) 收益兑现，负面建议看是否正确回避，观望只描述不判对错
+
+**整体复盘** `review_date(trade_date)` → `(逐股汇总 df, stats)`：
+- 批量取数（`loader.load_daily_many` + `store.load_results_many` 各一次 SQL），
+  50 只约 2 秒；stats 含按建议类型/名次分层聚合（胜率 T+20、平均收益、
+  超额 vs 全市场中位数基准）、总分-收益秩相关（秩次法，不依赖 scipy）、
+  次日落榜数、建议翻转数
+
+**跨日汇总** `multi_stats(dates)` → `{"by_action", "by_regime"}`：
+各建议类型整体胜率/兑现率，以及**按入选日市场环境分组**的胜率（直接验证 regime 过滤价值）。
+
+**UI**：导航第 5 页「跟踪复盘」，侧栏参数隐藏；两个视角 Tab：
+整体复盘（指标卡 + 建议/分层统计表 + 分数区分度散点 + 逐只明细表 + 多日汇总按钮，含环境分组）、
+个股跟踪（验证结论横幅 + 收益/再入选指标卡 + 走势图 + 异动事件 + 每日明细）。
+结果走 `@st.cache_data` 缓存（1 小时）。
+
+## 市场环境（quant/market）
+
+**数据**：
+- `index_daily`：5 个官方指数日线（上证/深成/创业板/沪深300/中证1000），
+  baostock 下载（非自算），`python -m quant.market.index_update --from 20100101` 回补；
+  日更脚本 `update_daily_mysql.py` 末尾复用会话增量更新。
+  注：科创50（sh.000688）baostock 无数据，暂不纳入。
+- `market_breadth`：每日全市场成交额、涨/跌/平家数与上涨占比，
+  由 `daily_qfq` 聚合（MySQL 5.7 无窗口函数，pandas 逐股算涨跌），
+  `python -m quant.market.build_breadth --rebuild` 分年回补；日更调用 `refresh_recent(10)`。
+
+**判定** `market_regime(trade_date)`（三维加权，全部 point-in-time）：
+
+| 维度 | 权重 | 分量 |
+|---|---|---|
+| 指数趋势 | 50% | 5 指数 × 4：收盘>MA20 / >MA60 / MA20>MA60 / MA20 五日上行，各 ±1 |
+| 市场量能 | 25% | 两市成交额 > 20 日均；5 日均额 > 20 日均额 |
+| 市场广度 | 25% | 上涨家数占比 > 50%；5 日均上涨占比 > 50% |
+
+合成得分 ∈ [-1, 1] → 五档：`≥0.5 强势 / ≥0.15 偏强 / ≥-0.15 中性 / ≥-0.5 偏弱 / <-0.5 弱势`。
+数据缺失（表未初始化）时退化为中性、不封顶。
+
+**应用**：只动建议层，分数与榜单不变。`explain_row` 接收 `row["regime"]` 后：
+偏弱封顶「轻仓试探」、弱势封顶「观望」（只降档永不升档），并在 reasons 写明下调原因。
+选股榜日期旁显示环境徽章 + 判定依据展开；跟踪复盘按环境分组验证过滤效果。
 
 ## v2 规划（本次未实现）
 
 - `quant/screening/ml/`：以 `factors_json` 为特征、未来 N 日收益>阈值为标签，LightGBM 预测分数经 `combine_scores(..., ml_boost=...)` 注入
 - `requirements.txt` 届时再加 lightgbm / scikit-learn
+- 科创50 指数：若换数据源（akshare/tushare）可补回 `INDICES`

@@ -442,6 +442,139 @@ def concentration_detail_chart(cross_df, top=20):
     return fig
 
 
+_ACTION_COLORS = {
+    "买入参考": "#43a047", "轻仓试探": "#1e88e5",
+    "观望": "#fb8c00", "减仓/回避": "#e53935",
+}
+_EVENT_STYLE = {
+    "vol_spike": ("triangle-up", "#ab47bc", 9),
+    "limit_up": ("triangle-up", "#ef5350", 12),
+    "limit_down": ("triangle-down", "#26a69a", 12),
+    "break_low": ("diamond", "#ef5350", 10),
+    "blocked": ("x", "#ffee58", 12),
+}
+
+
+def tracking_chart(daily: pd.DataFrame, summary: dict) -> go.Figure:
+    """入选后 30 日跟踪走势：收盘线 + 入场基准线 + 在榜/事件标记。"""
+    theme = chart_theme()
+    fig = go.Figure()
+
+    def _to_dt(s):
+        """YYYYMMDD 字符串 / Series -> 真正的日期轴。"""
+        return pd.to_datetime(s, format="%Y%m%d")
+
+    traded = daily[daily["traded"]].copy()
+    traded_x = _to_dt(traded["date"])
+    fig.add_trace(go.Scatter(
+        x=traded_x, y=traded["close"], mode="lines", name="收盘价",
+        line=dict(color="#90caf9", width=1.8),
+        hovertemplate="%{x|%Y-%m-%d}<br>收盘 %{y:.2f}<extra></extra>",
+    ))
+    entry = summary.get("entry_price")
+    if entry:
+        fig.add_hline(y=entry, line_dash="dash", line_color="#ffb74d",
+                      annotation_text=f"T+1 入场 {entry:.2f}",
+                      annotation_position="top left",
+                      annotation_font_color="#ffb74d")
+    inl = daily[daily["in_list"]].copy()
+    if not inl.empty:
+        fig.add_trace(go.Scatter(
+            x=_to_dt(inl["date"]), y=inl["close"], mode="markers",
+            name="当日在榜（颜色=当日建议）",
+            marker=dict(size=10, symbol="circle",
+                        color=[_ACTION_COLORS.get(a, "#9aa3b2") for a in inl["action"]],
+                        line=dict(width=1, color="#ffffff")),
+            hovertemplate="%{x|%Y-%m-%d}<br>名次 %{customdata[0]}  "
+                          "总分 %{customdata[1]:.4f}<br>%{customdata[2]}<extra></extra>",
+            customdata=list(zip(inl["rank_no"], inl["total_score"], inl["action"])),
+        ))
+    for ev in summary.get("events") or []:
+        row = daily[daily["date"] == ev["date"]]
+        if row.empty or not bool(row.iloc[0]["traded"]):
+            continue
+        symbol, color, size = _EVENT_STYLE.get(ev["kind"], ("circle", "#9aa3b2", 8))
+        fig.add_trace(go.Scatter(
+            x=[_to_dt(ev["date"])], y=[row.iloc[0]["close"]], mode="markers",
+            name=ev["text"], marker=dict(symbol=symbol, color=color, size=size),
+            hovertemplate=f"%{{x|%Y-%m-%d}}<br>{ev['text']}<extra></extra>",
+        ))
+    if summary.get("max_gain_day"):
+        row = daily[daily["date"] == summary["max_gain_day"]]
+        if not row.empty:
+            fig.add_annotation(x=_to_dt(summary["max_gain_day"]),
+                               y=row.iloc[0]["close"],
+                               text=f"最大浮盈 {summary['max_gain']:+.1%}",
+                               showarrow=True, arrowcolor=theme["up"],
+                               font=dict(color=theme["up"], size=11), yshift=18)
+    if summary.get("max_dd_day"):
+        row = daily[daily["date"] == summary["max_dd_day"]]
+        if not row.empty:
+            fig.add_annotation(x=_to_dt(summary["max_dd_day"]),
+                               y=row.iloc[0]["close"],
+                               text=f"最大浮亏 {summary['max_dd']:+.1%}",
+                               showarrow=True, arrowcolor=theme["down"],
+                               font=dict(color=theme["down"], size=11), yshift=-18)
+    fig.update_layout(
+        height=430, hovermode="x unified",
+        legend=dict(orientation="h", y=1.12),
+        margin=dict(l=40, r=20, t=30, b=40),
+        yaxis=dict(side="right", gridcolor=theme["grid"],
+                   tickfont=dict(color=theme["text"], size=11)),
+        xaxis=dict(
+            type="date",
+            tickformat="%m-%d",
+            hoverformat="%Y-%m-%d",
+            gridcolor=theme["grid"],
+            tickfont=dict(color=theme["text"], size=10),
+            title=dict(text="交易日", font=dict(color=theme["text"], size=11)),
+        ),
+    )
+    return fig
+
+
+def tracking_scatter(df: pd.DataFrame) -> go.Figure:
+    """总分 vs 后续收益散点：检验分数区分度（点颜色=入选建议）。"""
+    theme = chart_theme()
+    fig = go.Figure()
+    for action, g in df.groupby("action0"):
+        fig.add_trace(go.Scatter(
+            x=g["score0"], y=g["ret_latest"], mode="markers", name=action,
+            marker=dict(size=9, opacity=0.75,
+                        color=_ACTION_COLORS.get(action, "#9aa3b2")),
+            text=g["ts_code"] + " " + g["name"].fillna(""),
+            hovertemplate="%{text}<br>总分 %{x:.4f}  至今收益 %{y:+.1%}<extra></extra>",
+        ))
+    fig.add_hline(y=0, line_dash="dot", line_color=theme["text"])
+    fig.update_layout(
+        height=360, title="总分 vs 窗口收益（至今）",
+        legend=dict(orientation="h", y=1.15),
+        yaxis_tickformat=".0%",
+        margin=dict(l=40, r=20, t=46, b=20),
+        yaxis=dict(side="right", gridcolor=theme["grid"]),
+        xaxis=dict(title="入选总分", gridcolor=theme["grid"]),
+    )
+    return fig
+
+
+def tracking_winrate_chart(stats_df: pd.DataFrame) -> go.Figure:
+    """各建议类型的 T+20 胜率柱状图（多日汇总用）。"""
+    d = stats_df.dropna(subset=["胜率T+20"]).copy()
+    d = d.set_index("建议").reindex(
+        [a for a in _ACTION_COLORS if a in set(d["建议"])]).dropna(
+        subset=["胜率T+20"]).reset_index()
+    fig = go.Figure(go.Bar(
+        x=d["建议"], y=d["胜率T+20"],
+        marker_color=[_ACTION_COLORS.get(a, "#9aa3b2") for a in d["建议"]],
+        text=[f"{v:.0%}（{n}只）" for v, n in zip(d["胜率T+20"], d["样本数"])],
+        textposition="outside",
+    ))
+    fig.update_layout(height=320, title="各建议类型 T+20 胜率（跨日汇总）",
+                      yaxis_tickformat=".0%", yaxis_range=[0, 1.05],
+                      margin=dict(l=40, r=20, t=46, b=20))
+    return fig
+
+
 def overlay_trendlines(fig, df, result):
     """在已有 K 线 Figure 上叠加自动趋势线与触点。"""
     pos = {d: i for i, d in enumerate(df.index)}

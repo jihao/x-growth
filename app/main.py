@@ -5,6 +5,7 @@
 - 收藏：主区左侧页内收藏切换器，右侧同一套个股 Tabs，方便快速切换查看
 - 资金集中度：市场级页面，只需日期区间，与当前股票无关
 - 选股榜：市场级页面，自带交易日下拉，与侧栏参数完全无关
+- 跟踪复盘：市场级页面，入选后 30 日的再入选/建议变化/收益验证
 """
 from __future__ import annotations
 
@@ -22,9 +23,11 @@ from quant.concentration import cache
 from quant.backtest import engine, metrics, strategies
 from quant.charts import plots
 from quant.favorites import store as fav_store
+from quant.market import regime as market_regime
 from quant.screening import store as screening_store
 from quant.screening import explain as screening_explain
 from quant.screening import llm as screening_llm
+from quant.screening import tracking as screening_tracking
 from app.ui_theme import install_theme_watcher, ui_theme
 
 st.set_page_config(page_title="量化分析系统", layout="wide")
@@ -540,9 +543,331 @@ def _render_favorites_page(start, end, stocks, code_to_label):
         _render_stock_tabs(current, start, end, stocks)
 
 
+# ---------------- 跟踪复盘 ----------------
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _regime_of(date):
+    return market_regime.market_regime(date)
+
+
+def _regime_badge(date):
+    """市场环境徽章 + 判定依据展开；计算失败时静默降级（返回 None）。"""
+    try:
+        reg = _regime_of(date)
+    except Exception:
+        return None
+    color = market_regime.LEVEL_COLORS.get(reg["level"], "#9aa3b2")
+    cap_txt = {1: "　⚠ 建议封顶「轻仓试探」",
+               2: "　⚠ 建议封顶「观望」"}.get(reg["cap_index"], "")
+    st.markdown(
+        f"**市场环境**：<span style='color:{color};font-weight:700'>"
+        f"{reg['summary']}</span>{cap_txt}",
+        unsafe_allow_html=True,
+    )
+    with st.expander("判定依据（指数趋势 50% / 量能 25% / 广度 25%）",
+                     expanded=False):
+        comp = reg["components"]
+        for title, c in [("指数趋势", comp["trend"]),
+                         ("市场量能", comp["volume"]),
+                         ("市场广度", comp["breadth"])]:
+            st.markdown(f"**{title}**（×{c['weight']:.0%}）得分 {c['score']:+.2f}")
+            for line in c["lines"]:
+                st.markdown(f"- {line}")
+    return reg
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _trk_dates():
+    return screening_store.list_dates()
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _trk_picks(date):
+    return screening_store.load_results(date)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _trk_review(date):
+    return screening_tracking.review_date(date)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _trk_track(date, code):
+    return screening_tracking.track_pick(date, code)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _trk_multi_stats(dates):
+    return screening_tracking.multi_stats(list(dates))
+
+
+_ACTION_COLORS = {
+    "买入参考": "#43a047", "轻仓试探": "#1e88e5",
+    "观望": "#fb8c00", "减仓/回避": "#e53935",
+}
+_VERDICT_COLORS = {
+    "good": "#43a047", "ok": "#1e88e5", "neutral": "#fb8c00",
+    "bad": "#e53935", "pending": "#9aa3b2",
+}
+_STAT_PCT_COLS = ["胜率T+20", "平均T+5", "平均T+10", "平均T+20", "平均T+30",
+                  "平均至今", "平均最大浮盈", "平均最大浮亏", "超额T+20"]
+_RET_TABLE_COLS = ["T+5", "T+10", "T+20", "T+30", "至今", "最大浮盈", "最大浮亏"]
+
+
+def _pct(v, nd=1):
+    return "—" if v is None or pd.isna(v) else f"{v:+.{nd}%}"
+
+
+def _ret_color(v):
+    """A 股配色：涨红跌绿。"""
+    if v is None or pd.isna(v) or not isinstance(v, (int, float)):
+        return ""
+    if v > 0:
+        return "color: #ef5350"
+    if v < 0:
+        return "color: #26a69a"
+    return ""
+
+
+def _style_stats(sdf):
+    fmt = {c: "{:+.1%}" for c in _STAT_PCT_COLS if c in sdf.columns}
+    if "胜率T+20" in sdf.columns:
+        fmt["胜率T+20"] = "{:.0%}"
+    color_cols = [c for c in ["平均T+20", "超额T+20", "平均至今"] if c in sdf.columns]
+    return sdf.style.format(fmt, na_rep="—").map(_ret_color, subset=color_cols)
+
+
+def _render_tracking_review(dates):
+    picked = st.selectbox("选股日", dates, key="trk_rev_date")
+    try:
+        with st.spinner("复盘计算中（首次约几秒，之后走缓存）…"):
+            df, stats = _trk_review(picked)
+    except Exception as exc:
+        st.error(f"复盘计算失败：{exc}")
+        return
+    if df.empty:
+        st.info("该日无数据。")
+        return
+    win_days = int(df["window_days"].max())
+    st.caption(
+        f"复盘进度 {win_days}/30 个交易日"
+        + ("（窗口未满，结论可能变化）" if win_days < 30 else "")
+        + "；收益基准 = T+1 开盘价（前复权）。"
+    )
+    if "regime_level" in df.columns:
+        lv = df["regime_level"].iloc[0]
+        sc = df["regime_score"].iloc[0]
+        color = market_regime.LEVEL_COLORS.get(lv, "#9aa3b2")
+        st.markdown(
+            f"**入选日市场环境**：<span style='color:{color};font-weight:700'>"
+            f"{lv}（{sc:+.2f}）</span>",
+            unsafe_allow_html=True,
+        )
+    r20 = df["ret_20"].dropna()
+    cards = st.columns(6)
+    cards[0].metric("上榜", f"{len(df)} 只")
+    cards[1].metric("T+20 胜率", f"{(r20 > 0).mean():.0%}" if len(r20) else "—")
+    cards[2].metric("平均 T+20", _pct(r20.mean()) if len(r20) else "—")
+    cards[3].metric("全市场中位 T+20", _pct(stats["benchmark"].get(20)))
+    cards[4].metric("次日落榜", f"{stats['n_exits_day1']} 只")
+    cards[5].metric("建议翻转", f"{stats['n_flips']} 只")
+
+    tcol1, tcol2 = st.columns(2)
+    with tcol1:
+        st.markdown("**按建议类型**")
+        st.dataframe(
+            _style_stats(stats["by_action"].rename(columns={"action0": "建议"})),
+            width="stretch", hide_index=True,
+        )
+    with tcol2:
+        st.markdown("**按名次分层**")
+        st.dataframe(
+            _style_stats(stats["by_bucket"].rename(columns={"_bucket": "分层"})),
+            width="stretch", hide_index=True,
+        )
+
+    corr = stats.get("score_corr")
+    st.markdown(
+        "**分数区分度**　"
+        + (f"总分与窗口收益的秩相关 = {corr:+.2f}（越接近 +1 说明分数越有区分度）"
+           if pd.notna(corr) else "样本不足，暂无法计算分数相关性"))
+    st.plotly_chart(plots.tracking_scatter(df), width="stretch")
+
+    st.markdown("**逐只明细**")
+    _TONE_ICON = {"good": "✔", "ok": "○", "neutral": "—",
+                  "bad": "✘", "pending": "⏳"}
+    detail = pd.DataFrame({
+        "排名": df["rank0"], "代码": df["ts_code"], "名称": df["name"],
+        "建议": df["action0"],
+        "再入选": df["in_list_days"].astype(str) + "/" + df["window_days"].astype(str),
+        "最长连选": df["longest_streak"],
+        "名次(首/佳/末)": df.apply(
+            lambda r: f"{r['rank0']}/{r['best_rank'] or '—'}/{r['last_rank'] or '落榜'}",
+            axis=1),
+        "T+5": df["ret_5"], "T+10": df["ret_10"],
+        "T+20": df["ret_20"], "T+30": df["ret_30"],
+        "至今": df["ret_latest"],
+        "最大浮盈": df["max_gain"], "最大浮亏": df["max_dd"],
+        "结果": df["verdict_tone"].map(_TONE_ICON),
+        "验证": df["verdict"],
+    })
+    st.dataframe(
+        detail.style.format(
+            {c: "{:+.1%}" for c in _RET_TABLE_COLS}, na_rep="—"
+        ).map(_ret_color, subset=_RET_TABLE_COLS).map(
+            lambda v: (f"color: {_ACTION_COLORS.get(v, 'inherit')}; font-weight: 600;"),
+            subset=["建议"],
+        ).map(
+            lambda v: ("color: #43a047; font-weight: 700;" if v == "✔"
+                       else "color: #e53935; font-weight: 700;" if v == "✘"
+                       else ""),
+            subset=["结果"],
+        ),
+        width="stretch", hide_index=True, height=460,
+    )
+
+    with st.expander("多日汇总：各建议类型整体胜率（跨全部选股日）", expanded=False):
+        if st.button("计算多日汇总（约半分钟，结果缓存）", key="trk_multi_btn"):
+            with st.spinner("汇总计算中…"):
+                st.session_state["trk_multi"] = _trk_multi_stats(tuple(dates))
+        multi = st.session_state.get("trk_multi")
+        if multi is not None and not multi["by_action"].empty:
+            st.plotly_chart(plots.tracking_winrate_chart(multi["by_action"]),
+                            width="stretch")
+            st.dataframe(_style_stats(multi["by_action"]),
+                         width="stretch", hide_index=True)
+            if not multi["by_regime"].empty:
+                st.markdown("**按入选日市场环境分组**（验证 regime 过滤价值）")
+                st.dataframe(
+                    _style_stats(multi["by_regime"]).map(
+                        lambda v: (
+                            f"color: {market_regime.LEVEL_COLORS.get(v, 'inherit')};"
+                            " font-weight: 600;"),
+                        subset=["环境"],
+                    ),
+                    width="stretch", hide_index=True,
+                )
+
+
+def _render_tracking_stock(dates):
+    picked = st.selectbox("选股日", dates, key="trk_stk_date")
+    try:
+        picks = _trk_picks(picked)
+    except Exception as exc:
+        st.error(f"读取选股结果失败：{exc}")
+        return
+    if picks.empty:
+        st.info("该日无数据。")
+        return
+    labels = [
+        f"{r.rank_no}. {r.ts_code}  {r.name if pd.notna(r.name) else ''}"
+        for r in picks.itertuples()
+    ]
+    picked_label = st.selectbox("上榜股票", labels, key="trk_stk_pick")
+    code = picked_label.split(". ", 1)[1].split()[0]
+    try:
+        with st.spinner("跟踪计算中…"):
+            out = _trk_track(picked, code)
+    except Exception as exc:
+        st.error(f"跟踪计算失败：{exc}")
+        return
+    s, daily = out["summary"], out["daily"]
+    name = picks.loc[picks["ts_code"] == code, "name"].iloc[0]
+
+    if daily.empty:
+        st.warning(
+            "该选股日之后暂无行情（是最新交易日），30 日跟踪窗口为空，"
+            "请选择更早的选股日。"
+        )
+        return
+
+    st.markdown(f"### {s['rank0']}. {code}  {name if pd.notna(name) else ''}")
+    if s.get("regime_level"):
+        color = market_regime.LEVEL_COLORS.get(s["regime_level"], "#9aa3b2")
+        st.markdown(
+            f"**入选日市场环境**：<span style='color:{color};font-weight:700'>"
+            f"{s['regime_level']}（{s['regime_score']:+.2f}）</span>",
+            unsafe_allow_html=True,
+        )
+    tone_box = {"good": st.success, "ok": st.info, "neutral": st.info,
+                "bad": st.error, "pending": st.warning}[s["verdict_tone"]]
+    action_now = (f"　|　最新建议 **{s['action_last']}**"
+                  if s["action_last"] and s["action_last"] != s["action0"] else "")
+    tone_box(
+        f"验证结论：**{s['verdict']}**　|　入选建议 **{s['action0']}**" + action_now
+    )
+
+    r1 = st.columns(6)
+    r1[0].metric("T+5", _pct(s["ret_5"]))
+    r1[1].metric("T+10", _pct(s["ret_10"]))
+    r1[2].metric("T+20", _pct(s["ret_20"]))
+    r1[3].metric("T+30", _pct(s["ret_30"]))
+    r1[4].metric("至今", _pct(s["ret_latest"]))
+    r1[5].metric("T+1 入场价",
+                 f"{s['entry_price']:.2f}" if s["entry_price"] else "—")
+    r2 = st.columns(6)
+    r2[0].metric("最大浮盈", _pct(s["max_gain"]))
+    r2[1].metric("最大浮亏", _pct(s["max_dd"]))
+    r2[2].metric("再入选", f"{s['in_list_days']}/{s['window_days']} 天")
+    r2[3].metric("最长连选", f"{s['longest_streak']} 天")
+    r2[4].metric("名次 首/佳/末",
+                 f"{s['rank0']}/{s['best_rank'] or '—'}/{s['last_rank'] or '落榜'}")
+    r2[5].metric("复盘进度", f"{s['window_days']}/30")
+
+    if s["flips"]:
+        st.markdown("**建议变化**：" + "；".join(s["flips"]))
+    st.plotly_chart(plots.tracking_chart(daily, s), width="stretch")
+
+    if s["events"]:
+        st.markdown("**异动事件**")
+        for e in s["events"][:12]:
+            st.markdown(f"- {e['date']}：{e['text']}")
+    with st.expander("每日明细", expanded=False):
+        d = daily.copy()
+        d["在榜"] = d["in_list"].map({True: "✔", False: ""})
+        show = d[["day_n", "date", "close", "cum_ret", "在榜",
+                  "rank_no", "total_score", "action"]].rename(columns={
+            "day_n": "T+n", "date": "日期", "close": "收盘",
+            "cum_ret": "累计收益", "rank_no": "名次",
+            "total_score": "总分", "action": "建议",
+        })
+        st.dataframe(
+            show.style.format(
+                {"收盘": "{:.2f}", "累计收益": "{:+.1%}", "总分": "{:.4f}"},
+                na_rep="—",
+            ).map(_ret_color, subset=["累计收益"]).map(
+                lambda v: (f"color: {_ACTION_COLORS.get(v, 'inherit')};"
+                           " font-weight: 600;"),
+                subset=["建议"],
+            ),
+            width="stretch", hide_index=True,
+        )
+
+
+def _render_tracking_page():
+    st.subheader("选股跟踪复盘（T+1 ~ T+30）")
+    st.caption(
+        "跟踪每次入选后 30 个交易日：是否继续入选、建议是否变化、股价表现与建议验证。"
+        "市场级页面，与侧栏个股选择无关。"
+    )
+    try:
+        dates = _trk_dates()
+    except Exception as exc:
+        st.error(f"读取选股结果失败：{exc}")
+        return
+    if not dates:
+        st.info("暂无选股结果，请先运行：.venv/bin/python -m quant.screening.cli")
+        return
+    tab_rev, tab_stk = st.tabs(["整体复盘", "个股跟踪"])
+    with tab_rev:
+        _render_tracking_review(dates)
+    with tab_stk:
+        _render_tracking_stock(dates)
+
+
 st.title("量化交易分析系统")
 
-_PAGES = ("个股分析", "收藏", "资金集中度", "选股榜")
+_PAGES = ("个股分析", "收藏", "资金集中度", "选股榜", "跟踪复盘")
 
 with st.sidebar:
     st.header("导航")
@@ -577,7 +902,7 @@ with st.sidebar:
     if "ts_code" not in st.session_state:
         st.session_state.ts_code = options[0].split("  ")[0]
 
-    if nav != "选股榜":
+    if nav not in ("选股榜", "跟踪复盘"):
         st.header("参数")
         _default_start = pd.Timestamp.today() - pd.DateOffset(months=6)
         start = st.date_input(
@@ -639,7 +964,7 @@ elif nav == "资金集中度":
         if not cross.empty:
             st.plotly_chart(plots.concentration_detail_chart(cross), width="stretch")
 
-else:  # 选股榜
+elif nav == "选股榜":
     hcol1, hcol2 = st.columns([6, 1.4])
     with hcol1:
         st.subheader("选股榜（多策略加权）")
@@ -656,6 +981,7 @@ else:  # 选股榜
         st.info("暂无选股结果，请先运行：.venv/bin/python -m quant.screening.cli")
     else:
         picked_date = st.selectbox("交易日", screen_dates, key="tab4_date")
+        reg = _regime_badge(picked_date)
         try:
             res_df = screening_store.load_results(picked_date)
         except Exception as exc:
@@ -678,6 +1004,7 @@ else:  # 选股榜
                     "score_volume": r["score_volume"],
                     "weights": json.loads(r["weights_json"] or "{}"),
                     "factors": json.loads(r["factors_json"] or "{}"),
+                    "regime": reg,
                 })
                 actions.append(rep["action"])
             show["建议"] = actions
@@ -725,6 +1052,7 @@ else:  # 选股榜
                     "score_volume": row["score_volume"],
                     "weights": weights_obj,
                     "factors": factors_obj,
+                    "regime": reg,
                 })
 
                 st.markdown(f"### {row['rank_no']}. {code}  {name}")
@@ -784,5 +1112,8 @@ else:  # 选股榜
                         st.session_state.home_stock = code_to_label[code]
                     st.session_state.nav = "个股分析"
                     st.rerun()
+
+else:  # 跟踪复盘
+    _render_tracking_page()
 
 install_theme_watcher()

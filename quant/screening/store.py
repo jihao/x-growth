@@ -124,6 +124,57 @@ def load_results(trade_date) -> pd.DataFrame:
         conn.close()
 
 
+def load_stock_results(ts_code, start, end) -> pd.DataFrame:
+    """读取某股票在 [start, end] 区间内的全部选股记录（按日期升序）。
+
+    供跟踪复盘使用：查询入选后窗口期内的再入选/分数/因子变化。
+    """
+    s, e = config.fmt_date(start), config.fmt_date(end)
+    conn = _conn()
+    try:
+        _ensure_on(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT trade_date, rank_no, total_score, score_strategy, "
+                "score_structure, score_volume, weights_json, factors_json "
+                "FROM screening_results "
+                "WHERE ts_code=%s AND trade_date BETWEEN %s AND %s "
+                "ORDER BY trade_date",
+                (ts_code, s, e),
+            )
+            rows = cur.fetchall()
+            cols = [c[0] for c in cur.description] if cur.description else []
+        return pd.DataFrame(list(rows), columns=cols)
+    finally:
+        conn.close()
+
+
+def load_results_many(codes: list[str], start, end) -> pd.DataFrame:
+    """多股票区间选股记录一次取数（含 ts_code 列），供批量复盘使用。"""
+    s, e = config.fmt_date(start), config.fmt_date(end)
+    if not codes:
+        return pd.DataFrame()
+    placeholders = ",".join(["%s"] * len(codes))
+    conn = _conn()
+    try:
+        _ensure_on(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT ts_code, trade_date, rank_no, total_score, "
+                f"score_strategy, score_structure, score_volume, "
+                f"weights_json, factors_json FROM screening_results "
+                f"WHERE ts_code IN ({placeholders}) "
+                f"AND trade_date BETWEEN %s AND %s "
+                f"ORDER BY trade_date, rank_no",
+                (*codes, s, e),
+            )
+            rows = cur.fetchall()
+            cols = [c[0] for c in cur.description] if cur.description else []
+        return pd.DataFrame(list(rows), columns=cols)
+    finally:
+        conn.close()
+
+
 def list_dates() -> list[str]:
     """已有选股结果的交易日列表，新的在前。"""
     conn = _conn()

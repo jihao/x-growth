@@ -143,3 +143,40 @@ def test_disclaimer_present():
     rep = explain.explain_row(_row())
     assert "不构成投资建议" in rep["disclaimer"]
     assert len(explain.ACTIONS) == 4
+
+
+def _regime(level, cap):
+    return {"level": level, "score": -0.6, "cap_index": cap}
+
+
+def test_regime_weak_caps_to_observe():
+    row = _row(total=0.8)  # 基础档位「买入参考」
+    row["regime"] = _regime("弱势", 2)
+    rep = explain.explain_row(row)
+    assert rep["action"] == "观望"
+    assert rep["action_index"] == 2
+    assert any("市场环境弱势" in r and "下调" in r for r in rep["reasons"])
+
+
+def test_regime_mild_weak_caps_to_probe():
+    row = _row(total=0.8)
+    row["regime"] = _regime("偏弱", 1)
+    rep = explain.explain_row(row)
+    assert rep["action"] == "轻仓试探"
+    assert rep["action_index"] == 1
+
+
+def test_regime_strong_no_cap():
+    row = _row(total=0.8)
+    row["regime"] = _regime("强势", 0)
+    rep = explain.explain_row(row)
+    assert rep["action"] == "买入参考"
+    assert not any("市场环境" in r for r in rep["reasons"])
+
+
+def test_regime_never_upgrades():
+    row = _row(total=0.4)  # 基础档位「减仓/回避」(3)
+    row["regime"] = _regime("偏弱", 1)  # cap 更低（更激进）时不生效
+    rep = explain.explain_row(row)
+    assert rep["action"] == "减仓/回避"
+    assert rep["action_index"] == 3

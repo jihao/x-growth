@@ -11,6 +11,17 @@ _STOCKS = pd.DataFrame(
     {"ts_code": ["000001.SZ", "000002.SZ"], "name": ["平安银行", "万科A"]}
 )
 
+_REGIME = {
+    "date": "20260731", "score": -0.6, "level": "弱势", "cap_index": 2,
+    "data_missing": False,
+    "components": {
+        "trend": {"score": -1.0, "weight": 0.5, "lines": ["上证指数：✘"], "n_indices": 5},
+        "volume": {"score": -1.0, "weight": 0.25, "lines": ["缩量"]},
+        "breadth": {"score": -1.0, "weight": 0.25, "lines": ["多数下跌"]},
+    },
+    "summary": "弱势（得分 -0.60）",
+}
+
 
 def _base_patches():
     return (
@@ -19,6 +30,7 @@ def _base_patches():
         patch("quant.concentration.cache.read_series", return_value=pd.DataFrame()),
         patch("quant.favorites.store.ensure_table"),
         patch("quant.favorites.store.is_favorite", return_value=False),
+        patch("quant.market.regime.market_regime", return_value=_REGIME),
     )
 
 
@@ -33,7 +45,7 @@ def _goto(app, page):
 
 def test_stock_page_has_picker_and_two_tabs():
     with _base_patches()[0], _base_patches()[1], _base_patches()[2], \
-            _base_patches()[3], _base_patches()[4]:
+            _base_patches()[3], _base_patches()[4], _base_patches()[5]:
         app = AppTest.from_file(str(APP_FILE), default_timeout=10).run()
     assert not app.exception
     assert "股票" in _labels(app, "selectbox")
@@ -43,7 +55,7 @@ def test_stock_page_has_picker_and_two_tabs():
 
 def test_concentration_page_has_dates_but_no_stock_picker():
     with _base_patches()[0], _base_patches()[1], _base_patches()[2], \
-            _base_patches()[3], _base_patches()[4]:
+            _base_patches()[3], _base_patches()[4], _base_patches()[5]:
         app = AppTest.from_file(str(APP_FILE), default_timeout=10).run()
         _goto(app, "资金集中度")
     assert not app.exception
@@ -61,7 +73,7 @@ def test_favorites_page_in_page_switcher():
         }
     )
     with _base_patches()[0], _base_patches()[1], _base_patches()[2], \
-            _base_patches()[3], _base_patches()[4], \
+            _base_patches()[3], _base_patches()[4], _base_patches()[5], \
             patch("quant.favorites.store.list_favorites", return_value=fav_df):
         app = AppTest.from_file(str(APP_FILE), default_timeout=10).run()
         _goto(app, "收藏")
@@ -80,7 +92,7 @@ def test_favorites_page_in_page_switcher():
 
 def test_favorites_page_empty_hint():
     with _base_patches()[0], _base_patches()[1], _base_patches()[2], \
-            _base_patches()[3], _base_patches()[4], \
+            _base_patches()[3], _base_patches()[4], _base_patches()[5], \
             patch("quant.favorites.store.list_favorites",
                   return_value=pd.DataFrame(columns=["ts_code", "name", "created_at"])):
         app = AppTest.from_file(str(APP_FILE), default_timeout=10).run()
@@ -105,7 +117,7 @@ def test_screening_page_hides_sidebar_params():
         }
     )
     with _base_patches()[0], _base_patches()[1], _base_patches()[2], \
-            _base_patches()[3], _base_patches()[4], \
+            _base_patches()[3], _base_patches()[4], _base_patches()[5], \
             patch("quant.screening.store.list_dates", return_value=["20260731"]), \
             patch("quant.screening.store.load_results", return_value=results), \
             patch("quant.screening.llm.is_configured", return_value=False):

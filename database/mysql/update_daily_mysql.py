@@ -22,8 +22,12 @@ from __future__ import annotations
 import argparse
 import re
 import socket
+import sys
 import time
 from datetime import date
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 import baostock as bs
 
@@ -226,6 +230,18 @@ def main():
     if not dry_run:
         conn.commit()
     c.close()
+
+    # 指数日线与市场广度：复用本次 baostock 会话与 MySQL 连接，
+    # 失败不影响股票日更结果
+    try:
+        from quant.market import build_breadth, index_update
+        print("\n指数日线更新:")
+        index_update.update_indices(conn, TODAY, TODAY, dry_run=dry_run)
+        print("市场广度刷新:")
+        build_breadth.refresh_recent(conn, days=10, dry_run=dry_run)
+    except Exception as e:
+        print(f"指数/广度更新失败（不影响股票日更）: {e}")
+
     conn.close()
     bs.logout()
 
