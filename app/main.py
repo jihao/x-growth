@@ -435,6 +435,63 @@ def _render_stock_tabs(ts_code, start, end, stocks):
         _render_backtest_tab(ts_code, start, end)
 
 
+@st.dialog("选股榜是怎么选出来的？", width="large")
+def _show_screening_flow():
+    st.markdown(
+        """
+<style>
+.flow-box {border:1px solid rgba(128,128,128,.45); border-radius:10px;
+  padding:10px 14px; background:rgba(128,128,128,.08);}
+.flow-arrow {text-align:center; line-height:1.3; margin:7px 0; opacity:.75;}
+.flow-arrow span {font-size:.82rem; margin-left:6px;}
+.flow-groups {display:flex; gap:10px; flex-wrap:wrap;}
+.flow-g {flex:1; min-width:190px; border-radius:10px; padding:10px 12px; border:1px solid;}
+.flow-g h4 {margin:0 0 6px 0; font-size:.95rem;}
+.flow-g ul {margin:0; padding-left:1.1em; font-size:.85rem;}
+.g-strategy {border-color:rgba(33,150,243,.55); background:rgba(33,150,243,.10);}
+.g-structure {border-color:rgba(76,175,80,.55); background:rgba(76,175,80,.10);}
+.g-volume {border-color:rgba(255,152,0,.55); background:rgba(255,152,0,.10);}
+.flow-final {border:1px solid rgba(233,30,99,.55); background:rgba(233,30,99,.10);
+  border-radius:10px; padding:10px 14px;}
+.flow-num {font-weight:700;}
+</style>
+<div class="flow-box">① 取最新交易日<b>全市场截面</b>（约 5200 只）<br/>
+<small>loader.load_cross_section(trade_date)</small></div>
+<div class="flow-arrow">▼<span>过滤：剔除 ST / 停牌（volume=0）/ 无成交</span></div>
+<div class="flow-box">② 按当日<b>成交额</b>排序，取 <span class="flow-num">top 250</span> ＝ 市场热点池</div>
+<div class="flow-arrow">▼<span>逐股加载近 400 天日线，计算三组因子（各 0~1 分，0.5 为中性）</span></div>
+<div class="flow-groups">
+  <div class="flow-g g-strategy"><h4>策略组 × 0.40</h4><ul>
+    <li>双均线 / MACD / 布林 / RSI / 唐奇安，当前是否持仓</li>
+    <li>按该股<b>近 120 日回测夏普</b>动态加权，负夏普权重归 0</li>
+  </ul></div>
+  <div class="flow-g g-structure"><h4>结构组 × 0.35</h4><ul>
+    <li>背离 0.4：底背离加分 / 顶背离减分</li>
+    <li>趋势线 0.35：突破压力线加分 / 跌破支撑减分</li>
+    <li>浪型 0.25：三浪加速加分 / 下跌加速减分</li>
+  </ul></div>
+  <div class="flow-g g-volume"><h4>量价组 × 0.25</h4><ul>
+    <li>热度 0.5：成交额分位 + 量比（3 倍封顶）</li>
+    <li>动量 0.5：20 日收益率在候选池的分位</li>
+  </ul></div>
+</div>
+<div class="flow-arrow">▼<span>总分 = 0.4×策略 + 0.35×结构 + 0.25×量价</span></div>
+<div class="flow-final">③ 总分降序取 <span class="flow-num">top 50</span>，
+写入 screening_results 表（同日重跑自动覆盖）</div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        """
+**参数可调（跑批 CLI）：**
+- `--top-n-volume 250`：热点池大小；`--top-k 50`：最终入选数量
+- `--w-strategy / --w-structure / --w-volume`：组间权重
+
+点开榜单任意一行，可查看该股各组得分、因子明细与当日动态权重快照。
+        """.strip()
+    )
+
+
 def _render_favorites_page(start, end, stocks, code_to_label):
     """收藏页：页内左侧切换收藏，右侧查看行情/回测。"""
     try:
@@ -583,7 +640,12 @@ elif nav == "资金集中度":
             st.plotly_chart(plots.concentration_detail_chart(cross), width="stretch")
 
 else:  # 选股榜
-    st.subheader("选股榜（多策略加权）")
+    hcol1, hcol2 = st.columns([6, 1.4])
+    with hcol1:
+        st.subheader("选股榜（多策略加权）")
+    with hcol2:
+        if st.button("ⓘ 筛选流程", key="tab4_flow", use_container_width=True):
+            _show_screening_flow()
     st.caption("市场级榜单，与侧栏个股选择无关；由每日跑批生成（python -m quant.screening.cli）。")
     try:
         screen_dates = screening_store.list_dates()
@@ -606,17 +668,43 @@ else:  # 选股榜
             for c in ["total_score", "score_strategy",
                       "score_structure", "score_volume"]:
                 show[c] = show[c].astype(float)
+            # 逐行操作建议（与点行详情同一套规则引擎）
+            actions = []
+            for _, r in res_df.iterrows():
+                rep = screening_explain.explain_row({
+                    "total_score": r["total_score"],
+                    "score_strategy": r["score_strategy"],
+                    "score_structure": r["score_structure"],
+                    "score_volume": r["score_volume"],
+                    "weights": json.loads(r["weights_json"] or "{}"),
+                    "factors": json.loads(r["factors_json"] or "{}"),
+                })
+                actions.append(rep["action"])
+            show["建议"] = actions
             show = show.rename(columns={
                 "rank_no": "排名", "ts_code": "代码", "name": "名称",
                 "total_score": "总分", "score_strategy": "策略",
                 "score_structure": "结构", "score_volume": "量价",
             })
-            cols_show = ["排名", "代码", "名称", "总分", "策略", "结构", "量价"]
+            cols_show = ["排名", "代码", "名称", "总分", "建议",
+                         "策略", "结构", "量价"]
+            action_colors = {
+                "买入参考": "#43a047",
+                "轻仓试探": "#1e88e5",
+                "观望": "#fb8c00",
+                "减仓/回避": "#e53935",
+            }
             sel = st.dataframe(
                 show[cols_show].style.format({
                     "总分": "{:.4f}", "策略": "{:.4f}",
                     "结构": "{:.4f}", "量价": "{:.4f}",
-                }),
+                }).map(
+                    lambda v: (
+                        f"color: {action_colors.get(v, 'inherit')};"
+                        " font-weight: 600;"
+                    ),
+                    subset=["建议"],
+                ),
                 width="stretch",
                 hide_index=True,
                 on_select="rerun",

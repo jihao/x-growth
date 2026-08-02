@@ -103,6 +103,8 @@ tests/
 .venv/bin/python -m quant.screening.cli --date 20260731 --top-n-volume 250 --top-k 50
 .venv/bin/python -m quant.screening.cli --w-strategy 0.5 --w-structure 0.3 --w-volume 0.2
 .venv/bin/python -m quant.screening.cli --dry-run            # 只打印不落库
+.venv/bin/python -m quant.screening.cli --from 20260701 --to 20260731    # 区间逐日回算
+.venv/bin/python -m quant.screening.cli --from 20260701 --skip-existing  # 跳过已算过的日期
 ```
 
 建议串在日更之后：`python update_daily_mysql.py && .venv/bin/python -m quant.screening.cli`。  
