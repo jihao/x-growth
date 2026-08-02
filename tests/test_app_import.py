@@ -24,7 +24,8 @@ def test_app_module_imports():
     assert "结构分析" in src
     assert "tab1_collapse_right" in src
     assert "tab1_collapse_left" in src
-    assert "首页" in src and "收藏" in src
+    assert "个股分析" in src and "收藏" in src
+    assert "资金集中度" in src and "选股榜" in src
     assert "fav_store" in src or "quant.favorites" in src
     assert "ui_theme" in src
     assert "tab1_indicator" in src

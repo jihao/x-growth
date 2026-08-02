@@ -47,6 +47,17 @@ section[data-testid="stSidebar"] .stMarkdown h2 {
   margin-top: 0.15rem !important;
   margin-bottom: 0.35rem !important;
 }
+/* 窄侧栏（默认约 336px 太宽）+ 紧凑导航按钮 */
+section[data-testid="stSidebar"] {
+  width: 220px !important;
+  min-width: 220px !important;
+}
+section[data-testid="stSidebar"] .stButton > button {
+  min-height: 0 !important;
+  padding-top: 0.28rem !important;
+  padding-bottom: 0.28rem !important;
+  line-height: 1.3 !important;
+}
 </style>
 """
 
