@@ -14,8 +14,10 @@ from quant.concentration import cache
 from quant.backtest import engine, metrics, strategies
 from quant.charts import plots
 from quant.favorites import store as fav_store
+from app.ui_theme import install_theme_watcher, ui_theme
 
 st.set_page_config(page_title="量化分析系统", layout="wide")
+UI_THEME = ui_theme()
 
 
 @st.cache_data(ttl=600)
@@ -159,10 +161,10 @@ with tab1:
                 st.markdown("**图设置**")
                 overlays = st.multiselect(
                     "叠加", ["ma5", "ma10", "ma20", "ma60", "boll"],
-                    default=["ma5", "ma20", "boll"], key="tab1_overlays",
+                    default=["ma5", "ma10", "ma20", "ma60"], key="tab1_overlays",
                 )
                 sub = st.multiselect(
-                    "副图", ["macd", "rsi"], default=["macd", "rsi"], key="tab1_sub",
+                    "副图", ["macd", "rsi"], default=["macd"], key="tab1_sub",
                 )
                 period = st.selectbox(
                     "周期", ["日线", "周线（即将支持）"], key="tab1_period",
@@ -174,9 +176,9 @@ with tab1:
                     st.session_state.tab1_left_open = True
                     st.rerun()
                 overlays = st.session_state.get(
-                    "tab1_overlays", ["ma5", "ma20", "boll"]
+                    "tab1_overlays", ["ma5", "ma10", "ma20", "ma60"]
                 )
-                sub = st.session_state.get("tab1_sub", ["macd", "rsi"])
+                sub = st.session_state.get("tab1_sub", ["macd"])
                 period = st.session_state.get("tab1_period", "日线")
 
         with col_right:
@@ -299,7 +301,7 @@ with tab1:
         d_align = int(st.session_state.get("tab1_d_align", 3))
         d_confirm = float(st.session_state.get("tab1_d_confirm", 0.05))
 
-        fig = plots.kline_chart(df, tuple(overlays), tuple(sub))
+        fig = plots.kline_chart(df, tuple(overlays), tuple(sub), theme_type=UI_THEME)
         detail_rows = []
         wave_rows = []
         div_rows = []
@@ -435,7 +437,16 @@ with tab1:
                     })
 
         with col_mid:
-            st.plotly_chart(fig, width="stretch")
+            stock_name = ""
+            if not stocks.empty and "name" in stocks.columns:
+                match = stocks.loc[stocks["ts_code"] == ts_code, "name"]
+                if not match.empty and pd.notna(match.iloc[0]):
+                    stock_name = str(match.iloc[0])
+            st.markdown(
+                plots.quote_header_html(df, ts_code, stock_name, theme_type=UI_THEME),
+                unsafe_allow_html=True,
+            )
+            st.plotly_chart(fig, width="stretch", key=f"kline_{UI_THEME}")
             for w in mid_warnings:
                 st.warning(w)
             for info in mid_infos:
@@ -507,3 +518,5 @@ with tab3:
             c7.metric("交易次数", perf["num_trades"])
             c8.metric("基准收益", f"{perf['bench_total_return']:.2%}")
             st.plotly_chart(plots.backtest_chart(res), width="stretch")
+
+install_theme_watcher()

@@ -26,6 +26,7 @@ def test_app_module_imports():
     assert "tab1_collapse_left" in src
     assert "首页" in src and "收藏" in src
     assert "fav_store" in src or "quant.favorites" in src
+    assert "ui_theme" in src
     assert "toggle_fav_home" in src or "☆" in src or "★" in src
     assert "暂无收藏" in src
     assert 'key="nav"' in src or "session_state.nav" in src

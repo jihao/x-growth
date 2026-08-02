@@ -22,7 +22,7 @@ def test_kline_returns_figure():
 
 
 def test_kline_cn_colors_and_hover():
-    """A 股习惯：红涨绿跌；hover 显示开盘/最高/最低/收盘。"""
+    """A 股习惯：红涨绿跌；hover 显示开盘/最高/最低/收盘；深色专业主题。"""
     fig = plots.kline_chart(_df())
     candle = next(t for t in fig.data if t.type == "candlestick")
     assert candle.increasing.line.color == "#ef5350"
@@ -32,11 +32,42 @@ def test_kline_cn_colors_and_hover():
     sample = candle.text[0]
     for label in ("开盘", "最高", "最低", "收盘"):
         assert label in sample
-    assert fig.layout.dragmode == "zoom"  # 默认 zoom 才能悬停出 tip
-    assert fig.layout.hovermode == "x"
+    assert fig.layout.dragmode == "zoom"
+    assert fig.layout.hovermode == "x unified"
+    assert fig.layout.paper_bgcolor == "#0b0e14"
     assert fig.layout.legend.orientation == "h"
     assert fig.layout.legend.y is not None and fig.layout.legend.y < 0
     assert fig.layout.margin.b >= 80
+    # 成交量按涨跌着色
+    vol = next(t for t in fig.data if t.name == "成交量")
+    assert vol.marker.color is not None
+
+
+def test_kline_ma_colors():
+    fig = plots.kline_chart(_df(), overlays=("ma5", "ma10", "ma20", "ma60"), sub=())
+    ma5 = next(t for t in fig.data if t.name == "MA5")
+    ma10 = next(t for t in fig.data if t.name == "MA10")
+    assert ma5.line.color == "#FFD54F"
+    assert ma10.line.color == "#42A5F5"
+
+
+def test_kline_light_theme():
+    fig = plots.kline_chart(
+        _df(), overlays=("ma5",), sub=("macd",), theme_type="light",
+    )
+    assert fig.layout.paper_bgcolor == "#ffffff"
+    ma5 = next(t for t in fig.data if t.name == "MA5")
+    assert ma5.line.color == "#F57C00"
+
+
+def test_quote_header_html():
+    df = _df()
+    html = plots.quote_header_html(df, "600519.SH", "贵州茅台")
+    assert "600519.SH" in html
+    assert "贵州茅台" in html
+    assert "今开" in html and "成交额" in html
+    light = plots.quote_header_html(df, "600519.SH", "贵州茅台", theme_type="light")
+    assert 'background:#ffffff' in light.replace(" ", "")
 
 
 def test_backtest_chart():
