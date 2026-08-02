@@ -1,6 +1,7 @@
 """量化分析系统 Streamlit 界面。运行: .venv/bin/streamlit run app/main.py"""
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -14,6 +15,9 @@ from quant.concentration import cache
 from quant.backtest import engine, metrics, strategies
 from quant.charts import plots
 from quant.favorites import store as fav_store
+from quant.screening import store as screening_store
+from quant.screening import explain as screening_explain
+from quant.screening import llm as screening_llm
 from app.ui_theme import install_theme_watcher, ui_theme
 
 st.set_page_config(page_title="量化分析系统", layout="wide")
@@ -135,7 +139,7 @@ with st.sidebar:
             ts_code = st.session_state.ts_code
             st.caption(f"当前：{code_to_label.get(ts_code, ts_code)}")
 
-tab1, tab2, tab3 = st.tabs(["行情分析", "资金集中度", "策略回测"])
+tab1, tab2, tab3, tab4 = st.tabs(["行情分析", "资金集中度", "策略回测", "选股榜"])
 
 with tab1:
     df = _safe_daily(ts_code, start, end)
@@ -532,5 +536,118 @@ with tab3:
             c7.metric("交易次数", perf["num_trades"])
             c8.metric("基准收益", f"{perf['bench_total_return']:.2%}")
             st.plotly_chart(plots.backtest_chart(res), width="stretch")
+
+with tab4:
+    st.subheader("选股榜（多策略加权）")
+    try:
+        screen_dates = screening_store.list_dates()
+    except Exception as exc:
+        st.error(f"读取选股结果失败：{exc}")
+        screen_dates = []
+    if not screen_dates:
+        st.info("暂无选股结果，请先运行：.venv/bin/python -m quant.screening.cli")
+    else:
+        picked_date = st.selectbox("交易日", screen_dates, key="tab4_date")
+        try:
+            res_df = screening_store.load_results(picked_date)
+        except Exception as exc:
+            st.error(f"读取选股结果失败：{exc}")
+            res_df = pd.DataFrame()
+        if res_df.empty:
+            st.info("该日无数据。")
+        else:
+            show = res_df.copy()
+            for c in ["total_score", "score_strategy",
+                      "score_structure", "score_volume"]:
+                show[c] = show[c].astype(float)
+            show = show.rename(columns={
+                "rank_no": "排名", "ts_code": "代码", "name": "名称",
+                "total_score": "总分", "score_strategy": "策略",
+                "score_structure": "结构", "score_volume": "量价",
+            })
+            cols_show = ["排名", "代码", "名称", "总分", "策略", "结构", "量价"]
+            sel = st.dataframe(
+                show[cols_show].style.format({
+                    "总分": "{:.4f}", "策略": "{:.4f}",
+                    "结构": "{:.4f}", "量价": "{:.4f}",
+                }),
+                width="stretch",
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row",
+                key="tab4_table",
+            )
+            picked_rows = sel.selection.rows if sel is not None else []
+            if picked_rows:
+                row = res_df.iloc[picked_rows[0]]
+                code = row["ts_code"]
+                name = row["name"] if pd.notna(row["name"]) else ""
+                weights_obj = json.loads(row["weights_json"] or "{}")
+                factors_obj = json.loads(row["factors_json"] or "{}")
+                report = screening_explain.explain_row({
+                    "total_score": row["total_score"],
+                    "score_strategy": row["score_strategy"],
+                    "score_structure": row["score_structure"],
+                    "score_volume": row["score_volume"],
+                    "weights": weights_obj,
+                    "factors": factors_obj,
+                })
+
+                st.markdown(f"### {row['rank_no']}. {code}  {name}")
+                action_box = [st.success, st.info, st.warning, st.error][
+                    report["action_index"]
+                ]
+                action_box(
+                    f"操作建议：**{report['action']}** —— {report['position_advice']}"
+                )
+                for reason in report["reasons"]:
+                    st.markdown(f"- {reason}")
+                for sec in report["sections"]:
+                    with st.expander(sec["title"], expanded=False):
+                        for line in sec["lines"]:
+                            st.markdown(line)
+                with st.expander("原始数据（因子明细 / 动态权重）", expanded=False):
+                    dcol1, dcol2 = st.columns(2)
+                    with dcol1:
+                        st.json(factors_obj)
+                    with dcol2:
+                        st.json(weights_obj)
+
+                if screening_llm.is_configured():
+                    cache_key = f"tab4_llm_{picked_date}_{code}"
+                    if st.button("AI 深度解读", key="tab4_llm_btn"):
+                        with st.spinner("LLM 解读中…"):
+                            try:
+                                st.session_state[cache_key] = (
+                                    screening_llm.explain_with_llm({
+                                        "stock": f"{code} {name}",
+                                        "scores": {
+                                            "总分": round(float(row["total_score"]), 4),
+                                            "策略": round(float(row["score_strategy"]), 4),
+                                            "结构": round(float(row["score_structure"]), 4),
+                                            "量价": round(float(row["score_volume"]), 4),
+                                        },
+                                        "rule_action": report["action"],
+                                        "rule_reasons": report["reasons"],
+                                        "factors": factors_obj,
+                                    })
+                                )
+                            except Exception as exc:
+                                st.error(f"LLM 调用失败：{exc}")
+                    if st.session_state.get(cache_key):
+                        st.markdown("**AI 深度解读**")
+                        st.markdown(st.session_state[cache_key])
+                else:
+                    st.caption(
+                        "在仓库根目录配置 llm.env（参考 llm.env.example）后，"
+                        "可启用 AI 深度解读。"
+                    )
+                st.caption(report["disclaimer"])
+
+                if st.button("在行情分析中查看", key="tab4_goto"):
+                    st.session_state.ts_code = code
+                    if code in code_to_label:
+                        st.session_state.home_stock = code_to_label[code]
+                    st.rerun()
 
 install_theme_watcher()

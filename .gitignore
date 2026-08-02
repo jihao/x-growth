@@ -175,5 +175,7 @@ Desktop.ini
 *.key
 secrets/
 credentials.json
+llm.env
 .superpowers/
 .worktrees/
+scripts/deploy_app_quant.sh
