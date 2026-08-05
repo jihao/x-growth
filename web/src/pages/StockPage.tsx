@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { fetchDaily, fetchStocks, fetchStructure, type StructureResponse } from "../api/stocks";
+import { addFavorite, fetchFavorites, removeFavorite } from "../api/favorites";
 import { ChartCanvas, type ChartBar } from "../components/charts/ChartCanvas";
 import { VolumePanel } from "../components/charts/VolumePanel";
 import { OscillatorCanvas } from "../components/charts/OscillatorCanvas";
@@ -53,6 +54,7 @@ export function StockPage() {
   const [hasSelectedDrawing, setHasSelectedDrawing] = useState(false);
   const [deleteSignal, setDeleteSignal] = useState(0);
   const [structure, setStructure] = useState<StructureResponse | null>(null);
+  const [starred, setStarred] = useState(false);
   const chartCardRef = useRef<HTMLElement>(null);
 
   const bars = useMemo(
@@ -75,6 +77,8 @@ export function StockPage() {
         if (cancelled) return;
         setRawBars(daily.bars);
         setStructure(struct);
+        const favs = await fetchFavorites().catch(() => []);
+        setStarred(favs.some((f) => f.ts_code === tsCode));
         const hit = stocks.find((s) => s.ts_code === tsCode);
         setName(hit?.name ?? "");
       } catch (err) {
@@ -196,6 +200,27 @@ export function StockPage() {
           </div>
         </div>
         <div className="header-actions">
+          <button
+            type="button"
+            className="ghost"
+            onClick={() => {
+              void (async () => {
+                try {
+                  if (starred) {
+                    await removeFavorite(tsCode);
+                    setStarred(false);
+                  } else {
+                    await addFavorite(tsCode);
+                    setStarred(true);
+                  }
+                } catch (err) {
+                  setError(err instanceof Error ? err.message : String(err));
+                }
+              })();
+            }}
+          >
+            {starred ? "★ 取消收藏" : "☆ 收藏"}
+          </button>
           <button
             type="button"
             className="theme-toggle"
