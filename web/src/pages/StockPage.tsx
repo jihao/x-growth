@@ -265,79 +265,88 @@ export function StockPage() {
         </div>
       </div>
 
-      <div className="canvas-wrap">
-        <DrawingToolbar
-          tool={tool}
-          toolVariant={toolVariant}
-          locked={locked}
-          drawingsVisible={drawingsVisible}
-          hasSelectedDrawing={hasSelectedDrawing}
-          onToolChange={setTool}
-          onVariantChange={(id, variant) =>
-            setToolVariant((current) => ({ ...current, [id]: variant }))
-          }
-          onLockedChange={setLocked}
-          onVisibleChange={setDrawingsVisible}
-          onDelete={() => setDeleteSignal((n) => n + 1)}
-        />
-        <article className="chart-card" ref={chartCardRef}>
-          <div className="main-chart-area">
+      <article className="chart-card" ref={chartCardRef}>
+        <div className="main-chart-area">
+          <DrawingToolbar
+            tool={tool}
+            toolVariant={toolVariant}
+            locked={locked}
+            drawingsVisible={drawingsVisible}
+            hasSelectedDrawing={hasSelectedDrawing}
+            onToolChange={setTool}
+            onVariantChange={(id, variant) =>
+              setToolVariant((current) => ({ ...current, [id]: variant }))
+            }
+            onLockedChange={setLocked}
+            onVisibleChange={setDrawingsVisible}
+            onDelete={() => setDeleteSignal((n) => n + 1)}
+          />
+          <div className="canvas-wrap">
             {bars.length > 0 ? (
-              <ChartCanvas
-                bars={bars}
-                mainIndicators={mainIndicators}
-                overlays={[]}
-                tool={canvasTool}
-                toolVariant={toolVariant[tool] ?? "十字光标"}
-                locked={locked}
-                drawingsVisible={drawingsVisible}
-                maPeriods={maPeriods}
-                theme={theme}
-                viewStart={viewStart}
-                viewEnd={actualEnd}
-                onPan={panChart}
-                onZoom={zoomChart}
-                onCrosshair={setCrosshairRatio}
-                onDrawingSelectionChange={setHasSelectedDrawing}
-                deleteSignal={deleteSignal}
-                structureLines={structureLines}
-              />
+              <>
+                <ChartCanvas
+                  bars={bars}
+                  mainIndicators={mainIndicators}
+                  overlays={[]}
+                  tool={canvasTool}
+                  toolVariant={toolVariant[tool] ?? "十字光标"}
+                  locked={locked}
+                  drawingsVisible={drawingsVisible}
+                  maPeriods={maPeriods}
+                  theme={theme}
+                  viewStart={viewStart}
+                  viewEnd={actualEnd}
+                  onPan={panChart}
+                  onZoom={zoomChart}
+                  onCrosshair={setCrosshairRatio}
+                  onDrawingSelectionChange={setHasSelectedDrawing}
+                  deleteSignal={deleteSignal}
+                  structureLines={structureLines}
+                />
+                <div className="chart-hint">
+                  {locked
+                    ? "画线已锁定"
+                    : tool === "cursor"
+                      ? `${toolVariant.cursor} · 点击画线选中，按 Delete 删除`
+                      : `${toolVariant[tool]} · 再次点击图标可切换类型`}
+                </div>
+              </>
             ) : (
               <div className="chart-empty">{loading ? "加载图表…" : "暂无日线数据"}</div>
             )}
           </div>
-          {visibleBars.length > 0 && (
-            <VolumePanel
-              bars={visibleBars}
-              crosshairRatio={crosshairRatio}
-              onCrosshair={setCrosshairRatio}
-            />
-          )}
-          <div className="subchart-panel">
-            <div className="subchart-head">
-              {["MACD", "KDJ", "RSI"].map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={subchart === item ? "active" : ""}
-                  onClick={() => setSubchart(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            <OscillatorCanvas
-              type={subchart}
-              theme={theme}
-              crosshairRatio={crosshairRatio}
-              onCrosshair={setCrosshairRatio}
-              selectable
-              viewStart={viewStart}
-              viewEnd={actualEnd}
-            />
+        </div>
+        {visibleBars.length > 0 && (
+          <VolumePanel
+            bars={visibleBars}
+            crosshairRatio={crosshairRatio}
+            onCrosshair={setCrosshairRatio}
+          />
+        )}
+        <div className="subchart-panel">
+          <div className="subchart-head">
+            {["MACD", "KDJ", "RSI"].map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={subchart === item ? "active" : ""}
+                onClick={() => setSubchart(item)}
+              >
+                {item}
+              </button>
+            ))}
           </div>
-        </article>
-      </div>
+          <OscillatorCanvas
+            type={subchart}
+            theme={theme}
+            crosshairRatio={crosshairRatio}
+            onCrosshair={setCrosshairRatio}
+            selectable
+            viewStart={viewStart}
+            viewEnd={actualEnd}
+          />
+        </div>
+      </article>
 
       {structure && (
         <aside className="structure-panel" aria-label="结构分析">

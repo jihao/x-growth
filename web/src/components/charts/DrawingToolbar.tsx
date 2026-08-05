@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 const TOOLBAR = [
   { id: "cursor", icon: "⌖", label: "光标", options: ["十字光标", "普通光标"] },
   { id: "trend", icon: "╱", label: "画线", options: ["线段", "射线"] },
@@ -32,47 +34,97 @@ export function DrawingToolbar({
   onVisibleChange: (visible: boolean) => void;
   onDelete: () => void;
 }) {
+  const [toolMenu, setToolMenu] = useState<string | null>(null);
+
+  const glyphClass = (id: string) => {
+    if (id === "cursor") {
+      return toolVariant.cursor === "普通光标"
+        ? "tool-glyph mouse-pointer-icon"
+        : "tool-glyph crosshair-tool-icon";
+    }
+    if (id === "shape") return "tool-glyph shape-tool-icon";
+    return "tool-glyph";
+  };
+
+  const glyphContent = (id: (typeof TOOLBAR)[number]["id"], icon: string) => {
+    if (id === "cursor") return "";
+    if (id === "shape") return toolVariant.shape === "椭圆" ? "○" : "□";
+    return icon;
+  };
+
   return (
-    <div className="drawing-toolbar">
+    <aside className="drawing-toolbar" aria-label="画线工具栏">
       {TOOLBAR.map((item) => (
-        <div key={item.id} className="tool-group">
-          <button
-            type="button"
-            className={tool === item.id ? "active" : ""}
-            title={item.label}
-            onClick={() => onToolChange(item.id)}
-          >
-            {item.icon}
-          </button>
-          {tool === item.id && (
-            <select
-              value={toolVariant[item.id] ?? item.options[0]}
-              onChange={(event) => onVariantChange(item.id, event.target.value)}
-              aria-label={`${item.label}选项`}
-            >
-              {item.options.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+        <button
+          key={item.id}
+          type="button"
+          className={tool === item.id ? "active" : ""}
+          title={`${item.label}；再次点击选择类型`}
+          aria-label={item.label}
+          onClick={() => {
+            if (tool === item.id) {
+              setToolMenu(toolMenu === item.id ? null : item.id);
+            } else {
+              onToolChange(item.id);
+              setToolMenu(null);
+            }
+          }}
+        >
+          <span className={glyphClass(item.id)}>
+            {glyphContent(item.id, item.icon)}
+          </span>
+          <small>›</small>
+        </button>
       ))}
-      <button type="button" className={locked ? "active" : ""} onClick={() => onLockedChange(!locked)}>
-        {locked ? "锁定" : "未锁"}
+      {toolMenu && (
+        <div className="tool-options">
+          {TOOLBAR.find((item) => item.id === toolMenu)?.options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className={toolVariant[toolMenu] === option ? "selected" : ""}
+              onClick={() => {
+                onVariantChange(toolMenu, option);
+                setToolMenu(null);
+              }}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+      )}
+      <i />
+      <button
+        type="button"
+        className={locked ? "active" : ""}
+        onClick={() => onLockedChange(!locked)}
+        title={locked ? "解锁画线" : "锁定画线"}
+        aria-label={locked ? "解锁画线" : "锁定画线"}
+      >
+        <span className={`lock-icon ${locked ? "locked" : ""}`} />
       </button>
       <button
         type="button"
-        className={drawingsVisible ? "active" : ""}
+        className={!drawingsVisible ? "active" : ""}
         onClick={() => onVisibleChange(!drawingsVisible)}
+        title="显示或隐藏画线"
+        aria-label="显示或隐藏画线"
       >
-        {drawingsVisible ? "显示画线" : "隐藏画线"}
+        <span className={`eye-icon ${drawingsVisible ? "" : "hidden"}`} />
       </button>
-      <button type="button" disabled={!hasSelectedDrawing} onClick={onDelete}>
-        删除选中
+      <button
+        type="button"
+        className={`delete-drawing ${hasSelectedDrawing && !locked ? "enabled" : ""}`}
+        disabled={!hasSelectedDrawing || locked}
+        onClick={onDelete}
+        title={
+          hasSelectedDrawing ? "删除选中的画线" : "请先用普通光标选中画线"
+        }
+        aria-label="删除选中的画线"
+      >
+        <span className="trash-icon" />
       </button>
-    </div>
+    </aside>
   );
 }
 

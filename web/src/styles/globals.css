@@ -203,6 +203,7 @@ button { cursor: pointer; }
 .tool-glyph { width: 20px; height: 20px; display: grid; place-items: center; font-family: Arial, sans-serif; font-size: 17px; font-weight: 500; }
 .mouse-pointer-icon { position: relative; display: block; width: 16px; height: 19px; background: currentColor; clip-path: polygon(8% 3%, 8% 88%, 35% 65%, 52% 97%, 66% 89%, 49% 58%, 88% 58%); transform: translate(1px,1px); }
 .shape-tool-icon { font-size: 22px; font-weight: 400; line-height: 1; }
+.crosshair-tool-icon { position: relative; display: block; width: 34px; height: 34px; }
 .crosshair-tool-icon::before,.crosshair-tool-icon::after { content: ""; position: absolute; background: currentColor; border-radius: 2px; }
 .crosshair-tool-icon::before { width: 18px; height: 1.5px; left: 8px; top: 16px; }
 .crosshair-tool-icon::after { width: 1.5px; height: 18px; left: 16px; top: 8px; }
@@ -288,10 +289,10 @@ button { cursor: pointer; }
   color: #f5a8a4;
 }
 
-.main-chart-area { height: 420px; position: relative; }
 .main-chart-area .price-canvas { width: 100%; height: 100%; display: block; }
 .chart-empty {
-  height: 420px;
+  height: 100%;
+  min-height: 200px;
   display: grid;
   place-items: center;
   color: var(--muted);
@@ -299,25 +300,6 @@ button { cursor: pointer; }
 }
 .subchart-panel { border-top: 1px solid var(--line); }
 .subchart-panel .oscillator-canvas { width: 100%; height: 140px; display: block; }
-
-.canvas-wrap {
-  display: grid;
-  grid-template-columns: 56px 1fr;
-  gap: 0;
-  margin-top: 12px;
-  align-items: stretch;
-}
-.canvas-wrap .chart-card { margin-top: 0; }
-.drawing-toolbar {
-  flex-direction: column;
-  border: 1px solid #dfe5eb;
-  border-radius: 7px 0 0 7px;
-  background: #f7f9fb;
-  padding: 8px 4px;
-  gap: 4px;
-}
-.drawing-toolbar .tool-group { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.drawing-toolbar select { width: 52px; font-size: 10px; }
 
 .structure-panel {
   margin-top: 12px;
