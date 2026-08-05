@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
-import { fetchDaily, fetchStocks } from "../api/stocks";
+import { fetchDaily, fetchStocks, fetchStructure, type StructureResponse } from "../api/stocks";
 import { ChartCanvas, type ChartBar } from "../components/charts/ChartCanvas";
 import { VolumePanel } from "../components/charts/VolumePanel";
 import { OscillatorCanvas } from "../components/charts/OscillatorCanvas";
@@ -52,6 +52,7 @@ export function StockPage() {
   const [drawingsVisible, setDrawingsVisible] = useState(true);
   const [hasSelectedDrawing, setHasSelectedDrawing] = useState(false);
   const [deleteSignal, setDeleteSignal] = useState(0);
+  const [structure, setStructure] = useState<StructureResponse | null>(null);
   const chartCardRef = useRef<HTMLElement>(null);
 
   const bars = useMemo(
@@ -66,12 +67,14 @@ export function StockPage() {
     setError(null);
     (async () => {
       try {
-        const [daily, stocks] = await Promise.all([
+        const [daily, stocks, struct] = await Promise.all([
           fetchDaily(tsCode),
           fetchStocks().catch(() => [] as { ts_code: string; name: string }[]),
+          fetchStructure(tsCode).catch(() => null),
         ]);
         if (cancelled) return;
         setRawBars(daily.bars);
+        setStructure(struct);
         const hit = stocks.find((s) => s.ts_code === tsCode);
         setName(hit?.name ?? "");
       } catch (err) {
@@ -137,6 +140,11 @@ export function StockPage() {
     setMainIndicators((current) =>
       current.includes(ind) ? current.filter((item) => item !== ind) : [...current, ind],
     );
+
+  const structureLines = useMemo(() => {
+    if (!structure) return [];
+    return [...structure.trendlines.up, ...structure.trendlines.down];
+  }, [structure]);
 
   const canvasTool =
     tool === "shape" && toolVariant.shape === "椭圆" ? "ellipse" : tool;
@@ -267,6 +275,7 @@ export function StockPage() {
                 onCrosshair={setCrosshairRatio}
                 onDrawingSelectionChange={setHasSelectedDrawing}
                 deleteSignal={deleteSignal}
+                structureLines={structureLines}
               />
             ) : (
               <div className="chart-empty">{loading ? "加载图表…" : "暂无日线数据"}</div>
@@ -304,6 +313,19 @@ export function StockPage() {
           </div>
         </article>
       </div>
+
+      {structure && (
+        <aside className="structure-panel" aria-label="结构分析">
+          <h3>结构分析</h3>
+          <p>
+            趋势线 上{structure.trendlines.up.length} / 下{structure.trendlines.down.length}
+            {structure.wave
+              ? ` · 浪型 ${structure.wave.direction} ${structure.wave.verdict} (${structure.wave.ratio.toFixed(2)})`
+              : " · 暂无浪型"}
+            {` · 背离 ${structure.divergences.length} 条`}
+          </p>
+        </aside>
+      )}
     </section>
   );
 }

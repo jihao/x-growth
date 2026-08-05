@@ -29,7 +29,22 @@ function emaN(values: number[], period: number): number[] {
   return ema(values, period);
 }
 
-export function ChartCanvas({ bars, mainIndicators, overlays, tool, toolVariant, locked, drawingsVisible, maPeriods, theme, viewStart, viewEnd, onPan, onZoom: _onZoom, onCrosshair, onDrawingSelectionChange, deleteSignal }: {
+export type StructureLine = {
+  side: string;
+  start_date: string;
+  end_date: string;
+  start_price: number | null;
+  end_price: number | null;
+};
+
+function fmtChartDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+export function ChartCanvas({ bars, mainIndicators, overlays, tool, toolVariant, locked, drawingsVisible, maPeriods, theme, viewStart, viewEnd, onPan, onZoom: _onZoom, onCrosshair, onDrawingSelectionChange, deleteSignal, structureLines = [] }: {
   bars: ChartBar[];
   mainIndicators: string[];
   overlays: string[];
@@ -46,6 +61,7 @@ export function ChartCanvas({ bars, mainIndicators, overlays, tool, toolVariant,
   onCrosshair: (ratio: number | null) => void;
   onDrawingSelectionChange: (selected: boolean) => void;
   deleteSignal: number;
+  structureLines?: StructureLine[];
 }) {
   void _onZoom;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -341,6 +357,24 @@ export function ChartCanvas({ bars, mainIndicators, overlays, tool, toolVariant,
       });
     }
 
+    if (structureLines.length) {
+      const dateIndex = new Map(bars.map((bar, index) => [fmtChartDate(bar.date), index]));
+      structureLines.forEach((line) => {
+        if (line.start_price == null || line.end_price == null) return;
+        const i0 = dateIndex.get(line.start_date);
+        const i1 = dateIndex.get(line.end_date);
+        if (i0 == null || i1 == null) return;
+        ctx.save();
+        ctx.strokeStyle = line.side === "up" ? "#e57373" : "#4db6ac";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x(i0), y(line.start_price));
+        ctx.lineTo(x(i1), y(line.end_price));
+        ctx.stroke();
+        ctx.restore();
+      });
+    }
+
     if (crosshair) {
       ctx.save();
       ctx.strokeStyle = "#7b8794";
@@ -360,7 +394,7 @@ export function ChartCanvas({ bars, mainIndicators, overlays, tool, toolVariant,
       ctx.fillText(price.toFixed(2), w - pad.right + 13, crosshair.y + 4);
       ctx.restore();
     }
-  }, [bars, close, crosshair, draft, drawings, drawingsVisible, mainIndicators, overlays, selectableSeries, selected, selectedBar, selectedSeries, series, snapTarget, theme, viewEnd, viewStart]);
+  }, [bars, close, crosshair, draft, drawings, drawingsVisible, mainIndicators, overlays, selectableSeries, selected, selectedBar, selectedSeries, series, snapTarget, structureLines, theme, viewEnd, viewStart]);
 
   useEffect(() => {
     redraw();
