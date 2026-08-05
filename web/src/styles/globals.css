@@ -287,6 +287,18 @@ button { cursor: pointer; }
   background: #2a1515;
   color: #f5a8a4;
 }
+
+.main-chart-area { height: 420px; position: relative; }
+.main-chart-area .price-canvas { width: 100%; height: 100%; display: block; }
+.chart-empty {
+  height: 420px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.subchart-panel { border-top: 1px solid var(--line); }
+.subchart-panel .oscillator-canvas { width: 100%; height: 140px; display: block; }
 .global-actions { display: flex; align-items: center; gap: 8px; }.global-create { height: 34px; padding: 0 13px; border: 0; border-radius: 5px; color: white; background: #243b56; font-size: 12px; }
 .home-nav > span { color: #516275; font-weight: 700; font-size: 13px; }.home-nav > em { color: #278464; font-size: 10px; font-style: normal; letter-spacing: .3px; }
 
