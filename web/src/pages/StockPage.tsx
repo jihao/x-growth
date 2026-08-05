@@ -5,6 +5,7 @@ import { fetchDaily, fetchStocks } from "../api/stocks";
 import { ChartCanvas, type ChartBar } from "../components/charts/ChartCanvas";
 import { VolumePanel } from "../components/charts/VolumePanel";
 import { OscillatorCanvas } from "../components/charts/OscillatorCanvas";
+import { DrawingToolbar, type ToolId } from "../components/charts/DrawingToolbar";
 import { aggregateBars, type Period } from "../utils/bars";
 import type { Bar } from "../types/market";
 
@@ -21,6 +22,15 @@ function toChartBars(bars: Bar[]): ChartBar[] {
   }));
 }
 
+const DEFAULT_VARIANTS: Record<string, string> = {
+  cursor: "十字光标",
+  trend: "线段",
+  horizontal: "水平线段",
+  shape: "矩形",
+  note: "箭头注释",
+  measure: "区间测量",
+};
+
 export function StockPage() {
   const { code: rawCode } = useParams();
   const tsCode = rawCode ? normalizeTsCode(rawCode) : "";
@@ -36,6 +46,12 @@ export function StockPage() {
   const [viewEnd, setViewEnd] = useState(0);
   const [crosshairRatio, setCrosshairRatio] = useState<number | null>(null);
   const [maPeriods] = useState([5, 10, 20, 60]);
+  const [tool, setTool] = useState<ToolId>("cursor");
+  const [toolVariant, setToolVariant] = useState<Record<string, string>>(DEFAULT_VARIANTS);
+  const [locked, setLocked] = useState(false);
+  const [drawingsVisible, setDrawingsVisible] = useState(true);
+  const [hasSelectedDrawing, setHasSelectedDrawing] = useState(false);
+  const [deleteSignal, setDeleteSignal] = useState(0);
   const chartCardRef = useRef<HTMLElement>(null);
 
   const bars = useMemo(
@@ -117,10 +133,13 @@ export function StockPage() {
   const change = last && prev ? last.close - prev.close : 0;
   const changePct = last && prev && prev.close ? (change / prev.close) * 100 : 0;
 
-  const toggleMain = (name: string) =>
+  const toggleMain = (ind: string) =>
     setMainIndicators((current) =>
-      current.includes(name) ? current.filter((item) => item !== name) : [...current, name],
+      current.includes(ind) ? current.filter((item) => item !== ind) : [...current, ind],
     );
+
+  const canvasTool =
+    tool === "shape" && toolVariant.shape === "椭圆" ? "ellipse" : tool;
 
   return (
     <section className={theme === "dark" ? "theme-dark" : undefined} aria-label="个股分析">
@@ -213,62 +232,78 @@ export function StockPage() {
         </div>
       </div>
 
-      <article className="chart-card" ref={chartCardRef}>
-        <div className="main-chart-area">
-          {bars.length > 0 ? (
-            <ChartCanvas
-              bars={bars}
-              mainIndicators={mainIndicators}
-              overlays={[]}
-              tool="cursor"
-              toolVariant="普通光标"
-              locked={false}
-              drawingsVisible={true}
-              maPeriods={maPeriods}
+      <div className="canvas-wrap">
+        <DrawingToolbar
+          tool={tool}
+          toolVariant={toolVariant}
+          locked={locked}
+          drawingsVisible={drawingsVisible}
+          hasSelectedDrawing={hasSelectedDrawing}
+          onToolChange={setTool}
+          onVariantChange={(id, variant) =>
+            setToolVariant((current) => ({ ...current, [id]: variant }))
+          }
+          onLockedChange={setLocked}
+          onVisibleChange={setDrawingsVisible}
+          onDelete={() => setDeleteSignal((n) => n + 1)}
+        />
+        <article className="chart-card" ref={chartCardRef}>
+          <div className="main-chart-area">
+            {bars.length > 0 ? (
+              <ChartCanvas
+                bars={bars}
+                mainIndicators={mainIndicators}
+                overlays={[]}
+                tool={canvasTool}
+                toolVariant={toolVariant[tool] ?? "十字光标"}
+                locked={locked}
+                drawingsVisible={drawingsVisible}
+                maPeriods={maPeriods}
+                theme={theme}
+                viewStart={viewStart}
+                viewEnd={actualEnd}
+                onPan={panChart}
+                onZoom={zoomChart}
+                onCrosshair={setCrosshairRatio}
+                onDrawingSelectionChange={setHasSelectedDrawing}
+                deleteSignal={deleteSignal}
+              />
+            ) : (
+              <div className="chart-empty">{loading ? "加载图表…" : "暂无日线数据"}</div>
+            )}
+          </div>
+          {visibleBars.length > 0 && (
+            <VolumePanel
+              bars={visibleBars}
+              crosshairRatio={crosshairRatio}
+              onCrosshair={setCrosshairRatio}
+            />
+          )}
+          <div className="subchart-panel">
+            <div className="subchart-head">
+              {["MACD", "KDJ", "RSI"].map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={subchart === item ? "active" : ""}
+                  onClick={() => setSubchart(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            <OscillatorCanvas
+              type={subchart}
               theme={theme}
+              crosshairRatio={crosshairRatio}
+              onCrosshair={setCrosshairRatio}
+              selectable
               viewStart={viewStart}
               viewEnd={actualEnd}
-              onPan={panChart}
-              onZoom={zoomChart}
-              onCrosshair={setCrosshairRatio}
-              onDrawingSelectionChange={() => undefined}
-              deleteSignal={0}
             />
-          ) : (
-            <div className="chart-empty">{loading ? "加载图表…" : "暂无日线数据"}</div>
-          )}
-        </div>
-        {visibleBars.length > 0 && (
-          <VolumePanel
-            bars={visibleBars}
-            crosshairRatio={crosshairRatio}
-            onCrosshair={setCrosshairRatio}
-          />
-        )}
-        <div className="subchart-panel">
-          <div className="subchart-head">
-            {["MACD", "KDJ", "RSI"].map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={subchart === item ? "active" : ""}
-                onClick={() => setSubchart(item)}
-              >
-                {item}
-              </button>
-            ))}
           </div>
-          <OscillatorCanvas
-            type={subchart}
-            theme={theme}
-            crosshairRatio={crosshairRatio}
-            onCrosshair={setCrosshairRatio}
-            selectable
-            viewStart={viewStart}
-            viewEnd={actualEnd}
-          />
-        </div>
-      </article>
+        </article>
+      </div>
     </section>
   );
 }
